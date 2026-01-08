@@ -44,8 +44,8 @@ class S2GeoDataModule(pl.LightningDataModule):
 
     def prepare_data(self) -> None:
         if not os.path.exists(self.data_dir):
-            print("""
-            No dataset found. To download, please follow instructions on: https://github.com/microsoft/satclip
+            print(f"""
+            No dataset found at {self.data_dir}. To download, please follow instructions on: https://github.com/microsoft/satclip
             """)
 
     def setup(self, stage="fit"):
@@ -87,8 +87,8 @@ class S2Geo(NonGeoDataset):
     validation_filenames = [
         "index.csv",
         "images/",
-        "images/patch_0.tif",
-        "images/patch_99999.tif",
+        # "images/patch_0.tif",
+        # "images/patch_99999.tif",
     ]
 
     def __init__(
@@ -119,8 +119,21 @@ class S2Geo(NonGeoDataset):
         n_skipped_files = 0
         for i in range(df.shape[0]):
             filename = os.path.join(self.root, "images", df.iloc[i]["fn"])
+            
+            # Useful for training subsets
+            if os.path.exists(filename) == False:
+                n_skipped_files += 1
+                continue
 
             if os.path.getsize(filename) < CHECK_MIN_FILESIZE:
+                n_skipped_files += 1
+                continue
+            
+            # Ensure it is valid raster
+            try:
+                with rasterio.open(filename) as f:
+                    data = f.read().astype(np.float32)
+            except:
                 n_skipped_files += 1
                 continue
 
