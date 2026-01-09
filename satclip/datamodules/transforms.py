@@ -5,6 +5,49 @@ from albumentations.core.transforms_interface import ImageOnlyTransform
 from albumentations.pytorch import ToTensorV2
 import numpy as np
 
+import datetime
+
+def get_s2_train_transform_temporal(resize_crop_size = 256):
+    augmentation = T.Compose([
+        T.RandomCrop(resize_crop_size),
+        T.RandomHorizontalFlip(),
+        T.RandomVerticalFlip(),
+        T.GaussianBlur(3),
+    ])
+
+    def transform(sample):
+        image = sample["image"] / 10000.0
+        point = sample["point"]
+        image = torch.tensor(image)
+        image = augmentation(image)
+        point[:,:2] = coordinate_jitter(point[:,:2]) # only jitter spatial coordinate
+        return dict(image=image, point=point)
+
+    return transform
+
+def get_train_transform_temporal(resize_crop_size = 256,
+                  mean = [0.4139, 0.4341, 0.3482, 0.5263],
+                  std = [0.0010, 0.0010, 0.0013, 0.0013]
+                  ):
+    augmentation = T.Compose([
+        T.RandomCrop(resize_crop_size),
+        T.RandomHorizontalFlip(),
+        T.RandomVerticalFlip(),
+        T.GaussianBlur(3),
+    ])
+
+    """
+     Transform that applies coordinate jitter to spatial coordinates
+     """
+    def transform(sample):
+        image = sample["image"] / 10000.0
+        point = sample["point"]
+        image = torch.tensor(image)
+        image = augmentation(image)
+        point[:,:2] = coordinate_jitter(point[:,:2])  # only jitter spatial coordinate
+        return dict(image=image, point=point)
+
+    return transform
 
 def get_train_transform(resize_crop_size = 256,
                   mean = [0.4139, 0.4341, 0.3482, 0.5263],
@@ -71,6 +114,30 @@ def get_pretrained_s2_train_transform(resize_crop_size = 256):
         image = augmentation(image)
 
         point = coordinate_jitter(point)
+
+        return dict(image=image, point=point)
+
+    return transform
+
+def get_pretrained_s2_train_transform_temporal(resize_crop_size = 256):
+    augmentation = T.Compose([
+        T.RandomCrop(resize_crop_size),
+        T.RandomHorizontalFlip(),
+        T.RandomVerticalFlip(),
+        T.GaussianBlur(3),
+    ])
+
+    def transform(sample):
+        image = sample["image"] / 10000.0
+        point = sample["point"]
+
+        B10 = np.zeros((1, *image.shape[1:]), dtype=image.dtype)
+        image = np.concatenate([image[:10], B10, image[10:]], axis=0)
+        image = torch.tensor(image)
+
+        image = augmentation(image)
+
+        point[:,:2] = coordinate_jitter(point[:,:2]) # only jitter spatial coordinate
 
         return dict(image=image, point=point)
 

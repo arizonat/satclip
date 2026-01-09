@@ -3,7 +3,7 @@ from pathlib import Path
 
 import lightning.pytorch
 import torch
-from datamodules.s2geo_dataset import S2GeoDataModule
+from datamodules.s2geo_dataset import S2GeoDataModule, S2GeoTemporalDataModule
 from lightning.pytorch.cli import LightningCLI
 from loss import SatCLIPLoss
 from model import SatCLIP
@@ -111,27 +111,52 @@ class MyLightningCLI(LightningCLI):
         parser.add_argument("--watchmodel", action="store_true")
 
 
-def cli_main(default_config_filename="./configs/default.yaml"):
+def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False):
     save_config_fn = default_config_filename.replace(".yaml", "-latest.yaml")
     # modify configs/default.yaml for learning rate etc.
-    cli = MyLightningCLI(
-        model_class=SatCLIPLightningModule,
-        datamodule_class=S2GeoDataModule,
-        save_config_kwargs=dict(
-            config_filename=save_config_fn,
-            overwrite=True,
-        ),
-        trainer_defaults={
-            "accumulate_grad_batches": 16,
-            "log_every_n_steps": 10,
-        },
-        parser_kwargs={"default_config_files": [default_config_filename]},
-        seed_everything_default=0,
-        run=False,
-    )
+
+    if is_temporal:
+        print("Using temporal model!")
+
+        cli = MyLightningCLI(
+            model_class=SatCLIPLightningModule,
+            datamodule_class=S2GeoTemporalDataModule,
+            save_config_kwargs=dict(
+                config_filename=save_config_fn,
+                overwrite=True,
+            ),
+            trainer_defaults={
+                "accumulate_grad_batches": 16,
+                "log_every_n_steps": 10,
+            },
+            parser_kwargs={"default_config_files": [default_config_filename]},
+            seed_everything_default=0,
+            run=False,
+        )
+    else:
+        print("Using standard model!")
+        cli = MyLightningCLI(
+            model_class=SatCLIPLightningModule,
+            datamodule_class=S2GeoDataModule,
+            save_config_kwargs=dict(
+                config_filename=save_config_fn,
+                overwrite=True,
+            ),
+            trainer_defaults={
+                "accumulate_grad_batches": 16,
+                "log_every_n_steps": 10,
+            },
+            parser_kwargs={"default_config_files": [default_config_filename]},
+            seed_everything_default=0,
+            run=False,
+        )
 
     ts = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    run_name = f"SatCLIP_S2_{ts}"
+    if is_temporal:
+        run_name = f"SatCLIP_S2_Temporal_{ts}"
+    else:
+        run_name = f"SatCLIP_S2_{ts}"
+
     if cli.trainer.logger is not None:
         cli.trainer.logger.experiment.name = run_name
         # this seems to be necessary to force logging of datamodule hyperparams

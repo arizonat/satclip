@@ -12,9 +12,44 @@ import torch
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 
-from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform
+from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform, get_s2_train_transform_temporal, get_pretrained_s2_train_transform_temporal
+
+import datetime
 
 CHECK_MIN_FILESIZE = 10000 # 10kb
+
+class S2GeoTemporalDataModule(S2GeoDataModule):
+    def __init__(
+        self,
+        data_dir: str = "/data/geoclip_s2",
+        batch_size: int = 64,
+        num_workers: int = 6,
+        crop_size: int = 256,
+        val_random_split_fraction: float = 0.1,
+        transform: str = 'pretrained',
+        mode: str = "both",
+    ):
+        super().__init__()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        if transform=='pretrained':
+            self.train_transform = get_pretrained_s2_train_transform_temporal(resize_crop_size=crop_size)
+        elif transform=='default':
+            self.train_transform = get_s2_train_transform_temporal()
+        else:
+            self.train_transform = transform
+            
+        self.val_random_split_fraction = val_random_split_fraction
+        self.mode = mode
+        self.save_hyperparameters()
+
+    def setup(self, stage="fit"):
+        dataset = S2GeoTemporal(root=self.data_dir, transform=self.train_transform, mode=self.mode)
+
+        N_val = int(len(dataset) * self.val_random_split_fraction)
+        N_train = len(dataset) - N_val
+        self.train_dataset, self.val_dataset = torch.utils.data.random_split(dataset, [N_train, N_val])
 
 class S2GeoDataModule(pl.LightningDataModule):
     def __init__(
@@ -75,6 +110,7 @@ class S2GeoDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         raise NotImplementedError
 
+
 class S2Geo(NonGeoDataset):
     """S2-100K dataset.
 
@@ -120,20 +156,7 @@ class S2Geo(NonGeoDataset):
         for i in range(df.shape[0]):
             filename = os.path.join(self.root, "images", df.iloc[i]["fn"])
             
-            # Useful for training subsets
-            if os.path.exists(filename) == False:
-                n_skipped_files += 1
-                continue
-
             if os.path.getsize(filename) < CHECK_MIN_FILESIZE:
-                n_skipped_files += 1
-                continue
-            
-            # Ensure it is valid raster
-            try:
-                with rasterio.open(filename) as f:
-                    data = f.read().astype(np.float32)
-            except:
                 n_skipped_files += 1
                 continue
 
@@ -215,3 +238,74 @@ class S2Geo(NonGeoDataset):
             plt.suptitle(suptitle)
 
         return fig
+    
+class S2GeoTemporal(S2Geo):
+    """Placeholder for future S2-Temporal dataset implementation."""
+    def __init__(
+        self,
+        root: str,
+        transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
+        mode: Optional[str] = "both",
+        temporal_encoding: Optional[str] = "day_of_year"
+    ) -> None:
+        """Initialize a new S2-100K dataset instance.
+        Args:
+            root: root directory of S2-100K pre-sampled dataset
+            transform: torch transform to apply to a sample
+            mode: which data to return (options are "both" or "points"), useful for embedding locations without loading images 
+        """
+        assert mode in ["both", "points"]
+        self.root = root
+        self.transform = transform
+        self.mode = mode
+        if not self._check_integrity():
+            raise RuntimeError("Dataset not found or corrupted.")
+
+        index_fn = "index.csv"
+
+        df = pd.read_csv(os.path.join(self.root, index_fn))
+        self.filenames = []
+        self.points = []
+
+        n_skipped_files = 0
+        for i in range(df.shape[0]):
+            filename = os.path.join(self.root, "images", df.iloc[i]["fn"])
+
+            if os.path.getsize(filename) < CHECK_MIN_FILESIZE:
+                n_skipped_files += 1
+                continue
+
+            self.filenames.append(filename)
+
+            # Parse S2 timestamp to POSIX time, note that S2 timestamps are in UTC and up to the second anyway
+            t = self.parse_time(df.iloc[i]["ts"], temporal_encoding = temporal_encoding)
+
+            self.points.append(
+                (df.iloc[i]["lon"], df.iloc[i]["lat"], t)
+            )
+
+        print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
+            f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
+        
+    def parse_time(self, time_str: str,
+                    temporal_encoding: str="day_of_year") -> float:
+        """Parse a datetime string to POSIX timestamp.
+        Args:
+            time_str: datetime string in ISO 8601 format
+        Returns:
+            time encoding as float
+        """
+        dt = datetime.datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+
+        if temporal_encoding == "sin_norm_day_of_year":
+            day_of_year = float(dt.timetuple().tm_yday-1)
+            # Normalized day of year [-1,1]
+            return np.sin(2 * np.pi * day_of_year / 364.0)
+        elif temporal_encoding == "day_of_year":
+            # 0-indexed day of year, note: leap years not considered
+            return float(dt.timetuple().tm_yday-1)
+        elif temporal_encoding == "posix_timestamp":
+            # POSIX timestamp from UTC, as float (seconds since epoch)
+            return dt.timestamp()
+        else:
+            return dt.timestamp()
