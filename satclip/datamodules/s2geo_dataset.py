@@ -18,38 +18,7 @@ import datetime
 
 CHECK_MIN_FILESIZE = 10000 # 10kb
 
-class S2GeoTemporalDataModule(S2GeoDataModule):
-    def __init__(
-        self,
-        data_dir: str = "/data/geoclip_s2",
-        batch_size: int = 64,
-        num_workers: int = 6,
-        crop_size: int = 256,
-        val_random_split_fraction: float = 0.1,
-        transform: str = 'pretrained',
-        mode: str = "both",
-    ):
-        super().__init__()
-        self.data_dir = data_dir
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        if transform=='pretrained':
-            self.train_transform = get_pretrained_s2_train_transform_temporal(resize_crop_size=crop_size)
-        elif transform=='default':
-            self.train_transform = get_s2_train_transform_temporal()
-        else:
-            self.train_transform = transform
-            
-        self.val_random_split_fraction = val_random_split_fraction
-        self.mode = mode
-        self.save_hyperparameters()
 
-    def setup(self, stage="fit"):
-        dataset = S2GeoTemporal(root=self.data_dir, transform=self.train_transform, mode=self.mode)
-
-        N_val = int(len(dataset) * self.val_random_split_fraction)
-        N_train = len(dataset) - N_val
-        self.train_dataset, self.val_dataset = torch.utils.data.random_split(dataset, [N_train, N_val])
 
 class S2GeoDataModule(pl.LightningDataModule):
     def __init__(
@@ -110,6 +79,38 @@ class S2GeoDataModule(pl.LightningDataModule):
     def test_dataloader(self):
         raise NotImplementedError
 
+class S2GeoTemporalDataModule(S2GeoDataModule):
+    def __init__(
+        self,
+        data_dir: str = "/data/geoclip_s2",
+        batch_size: int = 64,
+        num_workers: int = 6,
+        crop_size: int = 256,
+        val_random_split_fraction: float = 0.1,
+        transform: str = 'pretrained',
+        mode: str = "both",
+    ):
+        super().__init__()
+        self.data_dir = data_dir
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        if transform=='pretrained':
+            self.train_transform = get_pretrained_s2_train_transform_temporal(resize_crop_size=crop_size)
+        elif transform=='default':
+            self.train_transform = get_s2_train_transform_temporal()
+        else:
+            self.train_transform = transform
+            
+        self.val_random_split_fraction = val_random_split_fraction
+        self.mode = mode
+        self.save_hyperparameters()
+
+    def setup(self, stage="fit"):
+        dataset = S2GeoTemporal(root=self.data_dir, transform=self.train_transform, mode=self.mode)
+
+        N_val = int(len(dataset) * self.val_random_split_fraction)
+        N_train = len(dataset) - N_val
+        self.train_dataset, self.val_dataset = torch.utils.data.random_split(dataset, [N_train, N_val])
 
 class S2Geo(NonGeoDataset):
     """S2-100K dataset.
@@ -301,11 +302,14 @@ class S2GeoTemporal(S2Geo):
             day_of_year = float(dt.timetuple().tm_yday-1)
             # Normalized day of year [-1,1]
             return np.sin(2 * np.pi * day_of_year / 364.0)
+        
         elif temporal_encoding == "day_of_year":
             # 0-indexed day of year, note: leap years not considered
             return float(dt.timetuple().tm_yday-1)
+        
         elif temporal_encoding == "posix_timestamp":
             # POSIX timestamp from UTC, as float (seconds since epoch)
             return dt.timestamp()
+        
         else:
             return dt.timestamp()
