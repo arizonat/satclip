@@ -470,6 +470,22 @@ class TemporalSatCLIP(SatCLIP):
 
         self.initialize_parameters()
 
+    def forward(self, image, coords):
+
+        image_features = self.encode_image(image)     
+        location_features = self.encode_location(coords).float()
+        # normalized features
+        image_features = image_features / image_features.norm(dim=1, keepdim=True)
+        location_features[:,:2] = location_features[:,:2] / location_features[:,:2].norm(dim=1, keepdim=True) # only normalize the spatial part
+
+        # cosine similarity as logits
+        logit_scale = self.logit_scale.exp()
+        logits_per_image = logit_scale * image_features @ location_features.t()
+        logits_per_location = logits_per_image.t()
+
+        # shape = [global_batch_size, global_batch_size]
+        return logits_per_image, logits_per_location
+
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""
 
