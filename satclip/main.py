@@ -6,13 +6,14 @@ import torch
 from datamodules.s2geo_dataset import S2GeoDataModule, S2GeoTemporalDataModule
 from lightning.pytorch.cli import LightningCLI
 from loss import SatCLIPLoss
-from model import SatCLIP
+from model import SatCLIP, TemporalSatCLIP
 
 torch.set_float32_matmul_precision('high')
 
 class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def __init__(
         self,
+        is_temporal: bool = False,
         embed_dim=512,
         image_resolution=256,
         vision_layers=12,
@@ -21,6 +22,8 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         in_channels=4,
         le_type="grid",
         pe_type="siren",
+        te_type="fourier",
+        te_k=10,
         frequency_num=16,
         max_radius=260,
         min_radius=1,
@@ -34,24 +37,46 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     ) -> None:
         super().__init__()
 
-        self.model = SatCLIP(
-            embed_dim=embed_dim,
-            image_resolution=image_resolution,
-            vision_layers=vision_layers,
-            vision_width=vision_width,
-            vision_patch_size=vision_patch_size,
-            in_channels=in_channels,
-            le_type=le_type,
-            pe_type=pe_type,
-            frequency_num=frequency_num,
-            max_radius=max_radius,
-            min_radius=min_radius,
-            legendre_polys=legendre_polys,
-            harmonics_calculation=harmonics_calculation,
-            sh_embedding_dims=sh_embedding_dims,
-            num_hidden_layers=num_hidden_layers,
-            capacity=capacity,
-        )
+        if is_temporal:
+            self.model = TemporalSatCLIP(
+                embed_dim=embed_dim,
+                image_resolution=image_resolution,
+                vision_layers=vision_layers,
+                vision_width=vision_width,
+                vision_patch_size=vision_patch_size,
+                in_channels=in_channels,
+                le_type=le_type,
+                pe_type=pe_type,
+                te_type=te_type,
+                te_k=te_k,
+                frequency_num=frequency_num,
+                max_radius=max_radius,
+                min_radius=min_radius,
+                legendre_polys=legendre_polys,
+                harmonics_calculation=harmonics_calculation,
+                sh_embedding_dims=sh_embedding_dims,
+                num_hidden_layers=num_hidden_layers,
+                capacity=capacity,
+            )
+        else:
+            self.model = SatCLIP(
+                embed_dim=embed_dim,
+                image_resolution=image_resolution,
+                vision_layers=vision_layers,
+                vision_width=vision_width,
+                vision_patch_size=vision_patch_size,
+                in_channels=in_channels,
+                le_type=le_type,
+                pe_type=pe_type,
+                frequency_num=frequency_num,
+                max_radius=max_radius,
+                min_radius=min_radius,
+                legendre_polys=legendre_polys,
+                harmonics_calculation=harmonics_calculation,
+                sh_embedding_dims=sh_embedding_dims,
+                num_hidden_layers=num_hidden_layers,
+                capacity=capacity,
+            )
 
         self.loss_fun = SatCLIPLoss()
         self.learning_rate = learning_rate
@@ -117,39 +142,26 @@ def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False
 
     if is_temporal:
         print("Using temporal model!")
-
-        cli = MyLightningCLI(
-            model_class=SatCLIPLightningModule,
-            datamodule_class=S2GeoTemporalDataModule,
-            save_config_kwargs=dict(
-                config_filename=save_config_fn,
-                overwrite=True,
-            ),
-            trainer_defaults={
-                "accumulate_grad_batches": 16,
-                "log_every_n_steps": 10,
-            },
-            parser_kwargs={"default_config_files": [default_config_filename]},
-            seed_everything_default=0,
-            run=False,
-        )
+        datamodule_class = S2GeoTemporalDataModule
     else:
         print("Using standard model!")
-        cli = MyLightningCLI(
-            model_class=SatCLIPLightningModule,
-            datamodule_class=S2GeoDataModule,
-            save_config_kwargs=dict(
-                config_filename=save_config_fn,
-                overwrite=True,
-            ),
-            trainer_defaults={
-                "accumulate_grad_batches": 16,
-                "log_every_n_steps": 10,
-            },
-            parser_kwargs={"default_config_files": [default_config_filename]},
-            seed_everything_default=0,
-            run=False,
-        )
+        datamodule_class = S2GeoDataModule
+
+    cli = MyLightningCLI(
+        model_class=SatCLIPLightningModule,
+        datamodule_class=datamodule_class,
+        save_config_kwargs=dict(
+            config_filename=save_config_fn,
+            overwrite=True,
+        ),
+        trainer_defaults={
+            "accumulate_grad_batches": 16,
+            "log_every_n_steps": 10,
+        },
+        parser_kwargs={"default_config_files": [default_config_filename]},
+        seed_everything_default=0,
+        run=False,
+    )
 
     ts = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
     if is_temporal:
@@ -183,4 +195,4 @@ if __name__ == "__main__":
         print('Superfastmode! 🚀')
     else:
         torch.backends.cuda.matmul.allow_tf32 = False
-    cli_main(config_fn)
+    cli_main(config_fn, is_temporal=True)

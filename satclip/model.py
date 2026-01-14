@@ -403,7 +403,8 @@ class TemporalSatCLIP(SatCLIP):
                 *args,
                 **kwargs
                 ):
-        super().__init__()
+        # super().__init__()
+        nn.Module.__init__(self)
             
         if isinstance(vision_layers, (tuple, list)):
             print('using modified resnet')
