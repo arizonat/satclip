@@ -301,7 +301,6 @@ class SpatioTemporalEncoder(nn.Module):
     def forward(self, coords):
         lonlat = coords[:, :2]
         t = coords[:, 2:]
-        print(t.shape)
         x_encoding = self.pos_enc(lonlat)
         t_encoding = self.temporal_enc(t)
 

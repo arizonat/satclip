@@ -10,6 +10,9 @@ from model import SatCLIP, TemporalSatCLIP
 
 torch.set_float32_matmul_precision('high')
 
+print("Setting anomaly detection to True")
+torch.autograd.set_detect_anomaly(True)
+
 class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def __init__(
         self,
@@ -156,7 +159,7 @@ def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False
         ),
         trainer_defaults={
             "accumulate_grad_batches": 16,
-            "log_every_n_steps": 10,
+            "log_every_n_steps": 3,
         },
         parser_kwargs={"default_config_files": [default_config_filename]},
         seed_everything_default=0,
@@ -190,9 +193,9 @@ if __name__ == "__main__":
     config_fn = "./configs/default.yaml"
 
     #A100 go vroom vroom 🚗💨
-    if torch.cuda.get_device_name(device=0)=='NVIDIA A100 80GB PCIe':
-        torch.backends.cuda.matmul.allow_tf32 = True
-        print('Superfastmode! 🚀')
-    else:
-        torch.backends.cuda.matmul.allow_tf32 = False
+    # if torch.cuda.get_device_name(device=0)=='NVIDIA A100 80GB PCIe':
+    #     torch.backends.cuda.matmul.allow_tf32 = True
+    #     print('Superfastmode! 🚀')
+    # else:
+    #     torch.backends.cuda.matmul.allow_tf32 = False
     cli_main(config_fn, is_temporal=True)

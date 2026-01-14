@@ -15,11 +15,13 @@ class Fourier(nn.Module):
         self.embedding_dim = 2*self.K
 
     def forward(self, t):
-        if t.ndim == 2:
-            t = t.squeeze(-1)
+        """
+        Assumes t is of shape (..., 1)
+        """
 
         fk = []
         for k in range(self.K):
             fk.append((1./np.sqrt(2))*torch.sin(2**k * torch.pi * t / 2.))
             fk.append((1./np.sqrt(2))*torch.cos(2**k * torch.pi * t / 2.))
-        return torch.stack(fk, dim=-1)
+        # return torch.stack(fk, dim=-1)
+        return torch.cat(fk, dim=-1)

@@ -4,8 +4,8 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.TensorBoardLogger
     init_args:
-      save_dir: 'satclip_logs'
-      name: 'satclip'
+      save_dir: 'satclip_temporal_logs'
+      name: 'satclip-s2-temporal'
       version: 'satclip'
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
@@ -15,6 +15,9 @@ trainer:
         filename: "{epoch}-{val_loss:.2f}"
   max_epochs: 500
 model:
+  is_temporal: True
+  te_type: 'fourier'
+  te_k: 10
   embed_dim: 256
   image_resolution: 256
   vision_layers: 4
@@ -31,8 +34,8 @@ model:
   num_hidden_layers: 2
   capacity: 256
 data:
-  data_dir: /data/s2
-  batch_size: 512
+  data_dir: /home/leca5365/Datasets/satclip-s2-temporal
+  batch_size: 4096
   num_workers: 8
   val_random_split_fraction: 0.1
 watchmodel: True
