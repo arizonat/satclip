@@ -10,7 +10,7 @@ import math
 import timm
 import torchgeo.models
 from torchgeo.models import ResNet18_Weights, ResNet50_Weights, ViTSmall16_Weights
-from location_encoder import get_positional_encoding, get_neural_network, LocationEncoder
+from location_encoder import get_positional_encoding, get_neural_network, LocationEncoder, get_temporal_encoding, SpatioTemporalEncoder
 from datamodules.s2geo_dataset import S2Geo
 
 class Bottleneck(nn.Module):
@@ -375,6 +375,99 @@ class SatCLIP(nn.Module):
 
         # shape = [global_batch_size, global_batch_size]
         return logits_per_image, logits_per_location
+    
+class TemporalSatCLIP(SatCLIP):
+    def __init__(self,
+                embed_dim: int,
+                # vision
+                image_resolution: int,
+                vision_layers: Union[Tuple[int, int, int, int], int, str],
+                vision_width: int,
+                vision_patch_size: int,
+                in_channels: int,
+                # location
+                le_type: str,
+                pe_type: str,
+                te_type: str,
+                frequency_num: int, 
+                max_radius: int,  
+                min_radius: int,
+                harmonics_calculation: str,
+                legendre_polys: int=10, 
+                sh_embedding_dims: int=16, 
+                ffn: bool=True,
+                num_hidden_layers: int=2,
+                capacity: int=256,
+                # temporal
+                te_k: int=10,
+                *args,
+                **kwargs
+                ):
+        super().__init__()
+            
+        if isinstance(vision_layers, (tuple, list)):
+            print('using modified resnet')
+            vision_heads = vision_width * 32 // 64
+            self.visual = ModifiedResNet(
+                layers=vision_layers,
+                output_dim=embed_dim,
+                heads=vision_heads,
+                input_resolution=image_resolution,
+                width=vision_width,
+                in_channels=in_channels
+            )
+            
+        elif vision_layers == 'moco_resnet18':
+            print('using pretrained moco resnet18')
+            weights = ResNet18_Weights.SENTINEL2_ALL_MOCO
+            in_chans = weights.meta["in_chans"]
+            self.visual = timm.create_model("resnet18", in_chans=in_chans, num_classes=embed_dim)
+            self.visual.load_state_dict(weights.get_state_dict(progress=True), strict=False)
+            self.visual.requires_grad_(False)
+            self.visual.fc.requires_grad_(True)
+
+        elif vision_layers == 'moco_resnet50':
+            print('using pretrained moco resnet50')
+            weights = ResNet50_Weights.SENTINEL2_ALL_MOCO
+            in_chans = weights.meta["in_chans"]
+            self.visual = timm.create_model("resnet50", in_chans=in_chans, num_classes=embed_dim)
+            self.visual.load_state_dict(weights.get_state_dict(progress=True), strict=False)
+            self.visual.requires_grad_(False)
+            self.visual.fc.requires_grad_(True)
+            
+        elif vision_layers == 'moco_vit16':
+            print('using pretrained moco vit16')
+            weights = ViTSmall16_Weights.SENTINEL2_ALL_MOCO
+            in_chans = weights.meta["in_chans"]
+            self.visual = timm.create_model("vit_small_patch16_224", in_chans=in_chans, num_classes=embed_dim)
+            self.visual.load_state_dict(weights.get_state_dict(progress=True), strict=False)
+            self.visual.requires_grad_(False)
+            self.visual.head.requires_grad_(True)
+
+        else:
+            print('using vision transformer')
+            vision_heads = vision_width // 64
+            self.visual = VisionTransformer(
+                input_resolution=image_resolution,
+                patch_size=vision_patch_size,
+                width=vision_width,
+                layers=vision_layers,
+                heads=vision_heads,
+                output_dim=embed_dim,
+                in_channels=in_channels
+            )
+        
+        self.posenc = get_positional_encoding(name=le_type, harmonics_calculation=harmonics_calculation, legendre_polys=legendre_polys, min_radius=min_radius, max_radius=max_radius, frequency_num=frequency_num).double()
+        self.tempenc = get_temporal_encoding(name=te_type, k=te_k).double()
+        self.nnet = get_neural_network(name=pe_type, input_dim=self.posenc.embedding_dim+self.tempenc.embedding_dim, num_classes=embed_dim, dim_hidden=capacity, num_layers=num_hidden_layers).double()
+        self.location = SpatioTemporalEncoder(self.posenc, 
+                                        self.tempenc,
+                                        self.nnet
+        ).double()
+        
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+
+        self.initialize_parameters()
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""

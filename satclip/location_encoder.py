@@ -6,6 +6,7 @@ from einops import rearrange
 import numpy as np
 from datetime import datetime
 import positional_encoding as PE
+import temporal_encoding as TE
 
 """
 FCNet
@@ -237,6 +238,14 @@ def get_positional_encoding(name, legendre_polys=10, harmonics_calculation='anal
                        name=name)
     else:
         raise ValueError(f"{name} not a known positional encoding.")
+    
+def get_temporal_encoding(name, k=10):
+    if name == "direct":
+        return TE.Direct()
+    elif name == "fourier":
+        return TE.Fourier(k=k)
+    else:
+        raise ValueError(f"{name} not a known temporal encoding.")
 
 def get_neural_network(name, input_dim, num_classes=256, dim_hidden=256, num_layers=2):
     if name == "linear":
@@ -273,3 +282,27 @@ class LocationEncoder(nn.Module):
     def forward(self, x):
         x = self.posenc(x)
         return self.nnet(x)
+    
+class SpatioTemporalEncoder(nn.Module):
+    def __init__(self, pos_enc, temporal_enc, nnet):
+        super().__init__()
+        self.temporal_enc = temporal_enc
+        self.pos_enc = pos_enc
+        self.nnet = nnet
+
+    def _combine(self, x_encoding, t_encoding, type: str="concat"):
+        if type == "concat":
+            return torch.cat([x_encoding, t_encoding], dim=-1)
+        elif type == "mult":
+            return x_encoding * t_encoding # assumes same dimensions
+        else:
+            raise ValueError(f"{type} not a known combination method.")
+
+    def forward(self, coords):
+        lonlat = coords[:, :2]
+        t = coords[:, 2:]
+        print(t.shape)
+        x_encoding = self.pos_enc(lonlat)
+        t_encoding = self.temporal_enc(t)
+
+        return self.nnet(self._combine(x_encoding, t_encoding))

@@ -20,7 +20,7 @@ def get_s2_train_transform_temporal(resize_crop_size = 256):
         point = sample["point"]
         image = torch.tensor(image)
         image = augmentation(image)
-        point[:,:2] = coordinate_jitter(point[:,:2]) # only jitter spatial coordinate
+        point[:2] = coordinate_jitter(point[:2]) # only jitter spatial coordinate
         return dict(image=image, point=point)
 
     return transform
@@ -44,7 +44,7 @@ def get_train_transform_temporal(resize_crop_size = 256,
         point = sample["point"]
         image = torch.tensor(image)
         image = augmentation(image)
-        point[:,:2] = coordinate_jitter(point[:,:2])  # only jitter spatial coordinate
+        point[:2] = coordinate_jitter(point[:2])  # only jitter spatial coordinate
         return dict(image=image, point=point)
 
     return transform
@@ -137,7 +137,7 @@ def get_pretrained_s2_train_transform_temporal(resize_crop_size = 256):
 
         image = augmentation(image)
 
-        point[:,:2] = coordinate_jitter(point[:,:2]) # only jitter spatial coordinate
+        point[:2] = coordinate_jitter(point[:2]) # only jitter spatial coordinate
 
         return dict(image=image, point=point)
 

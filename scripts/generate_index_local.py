@@ -8,7 +8,7 @@ import shapely.geometry
 import glob
 import pathlib
 
-ROOT = "/mnt/rolf-datastore/home/leca5365/Datasets/satclip-s2-temporal-subset"
+ROOT = "/mnt/rolf-datastore/home/leca5365/Datasets/satclip-s2-temporal"
 
 def main():
     
