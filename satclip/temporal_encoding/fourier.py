@@ -21,7 +21,7 @@ class Fourier(nn.Module):
 
         fk = []
         for k in range(self.K):
-            fk.append((1./np.sqrt(2))*torch.sin(2**k * torch.pi * t / 2.))
-            fk.append((1./np.sqrt(2))*torch.cos(2**k * torch.pi * t / 2.))
+            fk.append((1./np.sqrt(2))*torch.sin(k * torch.pi * t / 2.))
+            fk.append((1./np.sqrt(2))*torch.cos(k * torch.pi * t / 2.))
         # return torch.stack(fk, dim=-1)
         return torch.cat(fk, dim=-1)
