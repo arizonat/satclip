@@ -249,9 +249,9 @@ class S2GeoTemporal(S2Geo):
         mode: Optional[str] = "both",
         temporal_encoding: Optional[str] = "day_of_year"
     ) -> None:
-        """Initialize a new S2-100K dataset instance.
+        """Initialize a new S2-temporal dataset instance.
         Args:
-            root: root directory of S2-100K pre-sampled dataset
+            root: root directory of S2-temporal pre-sampled dataset
             transform: torch transform to apply to a sample
             mode: which data to return (options are "both" or "points"), useful for embedding locations without loading images 
         """

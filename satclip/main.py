@@ -10,8 +10,8 @@ from model import SatCLIP, TemporalSatCLIP
 
 torch.set_float32_matmul_precision('high')
 
-print("Setting anomaly detection to True")
-torch.autograd.set_detect_anomaly(True)
+# print("Setting anomaly detection to True")
+# torch.autograd.set_detect_anomaly(True)
 
 class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def __init__(
