@@ -14,5 +14,5 @@ class Direct(nn.Module):
         self.embedding_dim = 1
 
     def forward(self, t):
-        # place lon lat coordinates in a -pi, pi range
+        # just directly map time
         return t

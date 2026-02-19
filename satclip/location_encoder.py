@@ -293,7 +293,7 @@ class SpatioTemporalEncoder(nn.Module):
     def _combine(self, x_encoding, t_encoding, type: str="concat"):
         if type == "concat":
             return torch.cat([x_encoding, t_encoding], dim=-1)
-        elif type == "mult":
+        elif type == "mult": # Hadamard product
             return x_encoding * t_encoding # assumes same dimensions
         else:
             raise ValueError(f"{type} not a known combination method.")
