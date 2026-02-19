@@ -247,7 +247,7 @@ class S2GeoTemporal(S2Geo):
         root: str,
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
-        temporal_encoding: Optional[str] = "day_of_year"
+        temporal_encoding: Optional[str] = "normalized_day_of_year"
     ) -> None:
         """Initialize a new S2-temporal dataset instance.
         Args:
@@ -269,6 +269,7 @@ class S2GeoTemporal(S2Geo):
         self.points = []
 
         n_skipped_files = 0
+        print("Parsing with temporal encoding:", temporal_encoding)
         for i in range(df.shape[0]):
             filename = os.path.join(self.root, "images", df.iloc[i]["fn"])
 
@@ -289,7 +290,7 @@ class S2GeoTemporal(S2Geo):
             f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
         
     def parse_time(self, time_str: str,
-                    temporal_encoding: str="day_of_year") -> float:
+                    temporal_encoding: str="normalized_day_of_year") -> float:
         """Parse a datetime string to POSIX timestamp.
         Args:
             time_str: datetime string in ISO 8601 format
@@ -302,6 +303,10 @@ class S2GeoTemporal(S2Geo):
             day_of_year = float(dt.timetuple().tm_yday-1)
             # Normalized day of year [-1,1]
             return np.sin(2 * np.pi * day_of_year / 364.0)
+        
+        elif temporal_encoding == "normalized_day_of_year":
+            # Normalized day of year [0,1]
+            return float(dt.timetuple().tm_yday-1) / 364.0
         
         elif temporal_encoding == "day_of_year":
             # 0-indexed day of year, note: leap years not considered
