@@ -4,9 +4,9 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.TensorBoardLogger
     init_args:
-      save_dir: 'satclip_temporal_logs'
-      name: 'satclip-s2-temporal-55k-temporalsplits'
-      version: 'satclip-fixed-fourier'
+      save_dir: 'satclip_temporal_stloss_logs'
+      name: 'satclip-s2-stloss'
+      version: 'satclip-s2-stloss'
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:

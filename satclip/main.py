@@ -6,6 +6,7 @@ import torch
 from datamodules.s2geo_dataset import S2GeoDataModule, S2GeoTemporalDataModule
 from lightning.pytorch.cli import LightningCLI
 from loss import SatCLIPLoss
+from st_loss import TemporalSatCLIPLoss
 from model import SatCLIP, TemporalSatCLIP
 
 torch.set_float32_matmul_precision('high')
@@ -61,6 +62,8 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
             )
+            self.loss_fun = TemporalSatCLIPLoss()
+            self.is_temporal = True
         else:
             self.model = SatCLIP(
                 embed_dim=embed_dim,
@@ -80,8 +83,9 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
             )
+            self.loss_fun = SatCLIPLoss()
+            self.is_temporal = False
 
-        self.loss_fun = SatCLIPLoss()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.save_hyperparameters()
@@ -89,8 +93,14 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def common_step(self, batch, batch_idx):
         images = batch["image"]
         t_points = batch["point"].float()
-        logits_per_image, logits_per_coord = self.model(images, t_points)
-        return self.loss_fun(logits_per_image, logits_per_coord)
+        
+        if self.is_temporal:
+            logits_per_image, logits_per_coord, autocorrelations_per_image = self.model(images, t_points)
+            loss = self.loss_fun(logits_per_image, logits_per_coord, autocorrelations_per_image)
+        else:
+            logits_per_image, logits_per_coord = self.model(images, t_points)
+            loss = self.loss_fun(logits_per_image, logits_per_coord)
+        return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.common_step(batch, batch_idx)

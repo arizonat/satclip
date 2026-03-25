@@ -13,6 +13,20 @@ from torchgeo.models import ResNet18_Weights, ResNet50_Weights, ViTSmall16_Weigh
 from location_encoder import get_positional_encoding, get_neural_network, LocationEncoder, get_temporal_encoding, SpatioTemporalEncoder
 from datamodules.s2geo_dataset import S2Geo
 
+def pairwise_haversine_dist(coords):
+    #todo: the earth radius adjustment probably unnecessary, and/or use Vincenty's formula
+    EARTH_RADIUS = 6378 # km, near equator
+    lon = torch.deg2rad(coords[:,0])
+    lat = torch.deg2rad(coords[:,1])
+
+    dlat = lat.unsqueeze(0) - lat.unsqueeze(1)
+    dlon = lon.unsqueeze(0) - lon.unsqueeze(1)
+
+    hav = (1.0 - torch.cos(dlat) + torch.cos(lat.unsqueeze(1)) * torch.cos(lat.unsqueeze(0)) * (1.0 - torch.cos(dlon)) ) * 0.5
+    theta = 2.0 * torch.asin(torch.clamp(torch.sqrt(hav), 0.0, 1.0))
+    d = EARTH_RADIUS * theta
+    return d
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -364,6 +378,7 @@ class SatCLIP(nn.Module):
 
         image_features = self.encode_image(image)     
         location_features = self.encode_location(coords).float()
+        
         # normalized features
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         location_features = location_features / location_features.norm(dim=1, keepdim=True)
@@ -469,6 +484,47 @@ class TemporalSatCLIP(SatCLIP):
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         self.initialize_parameters()
+
+
+
+    def autocorrelations(self, coords, space_time_weight=0.5):
+        # Returns W, [global_batch_size, global_batch_size]
+        # Coords: [global_batch_size, 3]
+        device = coords.device
+        B = coords.shape[0]
+        spatial_correlations = torch.ones((B, B), device=device)
+        temporal_correlations = torch.ones((B, B), device=device)
+
+        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) + torch.eye(B, device=device), 0.0, 1.0)
+
+        # assumes times are already normalized [0,1]
+        dt = coords[:,2].unsqueeze(0) - coords[:,2].unsqueeze(1)
+        temporal_correlations = torch.clamp(torch.remainder(dt, 1.0), 0.0, 1.0)
+
+        autocorrelations =  space_time_weight * spatial_correlations + (1.0 - space_time_weight) * temporal_correlations
+
+        return autocorrelations
+
+    def forward(self, image, coords):
+        # Main difference with this forward over base, is that 
+
+        image_features = self.encode_image(image)     
+        location_features = self.encode_location(coords).float()
+        
+        # normalized features
+        image_features = image_features / image_features.norm(dim=1, keepdim=True)
+        location_features = location_features / location_features.norm(dim=1, keepdim=True)
+
+        # cosine similarity as logits
+        logit_scale = self.logit_scale.exp()
+        logits_per_image = logit_scale * image_features @ location_features.t()
+        logits_per_location = logits_per_image.t()
+
+        # autocorrelations
+        autocorrelations_per_image = self.autocorrelations(coords)
+
+        # shape = [global_batch_size, global_batch_size]
+        return logits_per_image, logits_per_location, autocorrelations_per_image
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""
