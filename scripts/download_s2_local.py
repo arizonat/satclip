@@ -111,6 +111,37 @@ def main(args):
         for j in range(4):
             try:
                 item = collection.get_item(df.iloc[random_row]["id"])
+
+                # Load selected STAC item into a multi-band raster stack
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    stack = stackstac.stack(
+                        item,
+                        assets=[
+                            "B01",
+                            "B02",
+                            "B03",
+                            "B04",
+                            "B05",
+                            "B06",
+                            "B07",
+                            "B08",
+                            "B8A",
+                            "B09",
+                            "B11",
+                            "B12",
+                        ],
+                        epsg=4326,
+                    )
+                _, num_channels, height, width = stack.shape
+
+                # Randomly sample a 256x256 window within image bounds
+                x = np.random.randint(0, width - 256)
+                y = np.random.randint(0, height - 256)
+
+                # Extract patch and compute in-memory
+                patch = stack[0, :, y : y + 256, x : x + 256].compute()
+                
                 break
             except Exception as e:
                 print(e)
@@ -123,35 +154,7 @@ def main(args):
             num_error_hits += 1
             continue
 
-        # Load selected STAC item into a multi-band raster stack
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            stack = stackstac.stack(
-                item,
-                assets=[
-                    "B01",
-                    "B02",
-                    "B03",
-                    "B04",
-                    "B05",
-                    "B06",
-                    "B07",
-                    "B08",
-                    "B8A",
-                    "B09",
-                    "B11",
-                    "B12",
-                ],
-                epsg=4326,
-            )
-        _, num_channels, height, width = stack.shape
 
-        # Randomly sample a 256x256 window within image bounds
-        x = np.random.randint(0, width - 256)
-        y = np.random.randint(0, height - 256)
-
-        # Extract patch and compute in-memory
-        patch = stack[0, :, y : y + 256, x : x + 256].compute()
         #patch = stack[0, :, y : y + 256, x : x + 256]
 
         # Filter patches with more than 10% missing data
