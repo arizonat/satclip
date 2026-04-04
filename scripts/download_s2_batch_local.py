@@ -68,7 +68,7 @@ def set_up_parser() -> argparse.ArgumentParser:
 
     parser.add_argument(
         "--num_workers",
-        default=24,
+        default=12,
         type=int,
         required=False,
         help="Number of parallel workers for downloading and processing patches",
@@ -158,11 +158,11 @@ def main(args):
                             epsg=4326,
                         )
                     stacks.append(stack)
-                    xs = [np.random.randint(0, width - 256) for width in [stack.shape[3] for stack in stacks]]
-                    ys = [np.random.randint(0, height - 256) for height in [stack.shape[2] for stack in stacks]]
-                    stacks_sampled = [stack[0, :, y : y + 256, x : x + 256] for stack, x, y in zip(stacks, xs, ys)]
-                    patches = dask.compute(*stacks_sampled, scheduler="threads", num_workers=args.num_workers)
-                    break
+                xs = [np.random.randint(0, width - 256) for width in [stack.shape[3] for stack in stacks]]
+                ys = [np.random.randint(0, height - 256) for height in [stack.shape[2] for stack in stacks]]
+                stacks_sampled = [stack[0, :, y : y + 256, x : x + 256] for stack, x, y in zip(stacks, xs, ys)]
+                patches = dask.compute(*stacks_sampled, scheduler="threads", num_workers=args.num_workers)
+                break
 
             except Exception as e:
                 print(e)
@@ -174,6 +174,8 @@ def main(args):
             print(f"failed to get items")
             num_error_hits += len(batch_ids)
             continue
+
+        print(len(patches))
 
         for i, patch in enumerate(patches):
             # Filter patches with more than 10% missing data (this should already be handled by parquet)
