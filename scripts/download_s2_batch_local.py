@@ -60,6 +60,14 @@ def set_up_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--img_output_dir",
+        default="images",
+        type=str,
+        required=True,
+        help="Directory to save downloaded image patches",
+    )
+
+    parser.add_argument(
         "--s2_parquet_fn",
         type=str,
         required=True,
@@ -95,6 +103,8 @@ def main(args):
     # Sanity checks: output file shouldn't already exist, input parquet must exist
     assert not os.path.exists(args.output_fn)
     assert os.path.exists(args.s2_parquet_fn)
+
+    os.makedirs(args.img_output_dir, exist_ok=True)
 
     # Connect to Microsoft Planetary Computer STAC API
     catalog = pystac_client.Client.open(
@@ -216,7 +226,7 @@ def main(args):
 
             # Write GeoTIFF to disk
             patch.rio.to_raster(
-                f"images_TESTING/patch_{idx}.tif",
+                f"{args.img_output_dir}/patch_{idx}.tif",
                 driver="GTiff",
                 dtype=np.uint16,
                 compress="LZW",
