@@ -185,8 +185,6 @@ def main(args):
             num_error_hits += len(batch_ids)
             continue
 
-        print(len(patches))
-
         for i, patch in enumerate(patches):
             # Filter patches with more than 10% missing data (this should already be handled by parquet)
             num_channels = patch.shape[0]
@@ -226,7 +224,7 @@ def main(args):
 
             # Write GeoTIFF to disk
             patch.rio.to_raster(
-                f"{args.img_output_dir}/patch_{idx}.tif",
+                f"{args.img_output_dir}/patch_{batch_ids[i]}.tif",
                 driver="GTiff",
                 dtype=np.uint16,
                 compress="LZW",
