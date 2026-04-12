@@ -187,6 +187,7 @@ def main(args):
 
         for i, patch in enumerate(patches):
             # Filter patches with more than 10% missing data (this should already be handled by parquet)
+            item = items[i]
             num_channels = patch.shape[0]
             percent_empty = np.mean((np.isnan(patch.data)).sum(axis=0) == num_channels)
             percent_zero = np.mean((patch.data == 0).sum(axis=0) == num_channels)
