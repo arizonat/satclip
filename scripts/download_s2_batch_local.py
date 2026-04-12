@@ -225,7 +225,7 @@ def main(args):
 
             # Write GeoTIFF to disk
             patch.rio.to_raster(
-                f"{args.img_output_dir}/patch_{batch_ids[i]}.tif",
+                f"{args.img_output_dir}/{item.datetime.year}/patch_{batch_ids[i]}.tif",
                 driver="GTiff",
                 dtype=np.uint16,
                 compress="LZW",
