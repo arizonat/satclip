@@ -8,11 +8,12 @@ import shapely.geometry
 import glob
 import pathlib
 
-ROOT = "/mnt/rolf-datastore/home/leca5365/Datasets/satclip-s2-temporal"
+# ROOT = "/mnt/rolf-datastore/home/leca5365/Datasets/satclip-s2-temporal"
+ROOT = "/home/leca5365/Documents/satclip/scripts/"
 
 def main():
     
-    globs = glob.glob(f"{ROOT}/images/*.tif")
+    globs = glob.glob(f"{ROOT}/images/*/*.tif")
 
     lats = []
     lons = []
