@@ -205,6 +205,7 @@ def main(args):
                 "datetime": item.datetime.isoformat(),
                 "platform": item.properties.get("platform", ""),
                 "mgrs_tile": item.properties.get("s2:mgrs_tile", ""),
+                "product_id": item.properties.get("s2:product_id", ""),
                 "granule_id": item.properties.get("s2:granule_id", ""),
                 "orbit_state": item.properties.get("sat:orbit_state", ""),
                 "relative_orbit": str(item.properties.get("sat:relative_orbit", "")),
@@ -243,6 +244,8 @@ def main(args):
                     xs[i],
                     ys[i],
                     metadata["granule_id"],
+                    metadata["product_id"],
+                    metadata["datetime"],
                 )
             )
 
@@ -252,7 +255,7 @@ def main(args):
         # progress_bar.close()
 
     # Save all patch locations and sample info to CSV
-    df = pd.DataFrame(results, columns=["idx", "row", "x", "y", "granule_id"])
+    df = pd.DataFrame(results, columns=["idx", "row", "x", "y", "granule_id", "product_id", "datetime"])
     df.to_csv(args.output_fn)
 
     # Print final stats
