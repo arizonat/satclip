@@ -139,6 +139,7 @@ def main(args):
         for j in range(5):
             try:
                 # Download metadata for batch of items
+                # Does NOT maintain order of IDs!
                 items = catalog.search(
                     collections=["sentinel-2-l2a"],
                     ids=batch_ids,
@@ -203,10 +204,11 @@ def main(args):
 
             # Extract STAC metadata for provenance and traceability
             metadata = {
+                "id": item.id, 
                 "datetime": item.datetime.isoformat(),
                 "platform": item.properties.get("platform", ""),
                 "mgrs_tile": item.properties.get("s2:mgrs_tile", ""),
-                "product_id": item.properties.get("s2:product_id", ""),
+                "product_uri": item.properties.get("s2:product_uri", ""),
                 "granule_id": item.properties.get("s2:granule_id", ""),
                 "orbit_state": item.properties.get("sat:orbit_state", ""),
                 "relative_orbit": str(item.properties.get("sat:relative_orbit", "")),
@@ -228,7 +230,7 @@ def main(args):
 
             # Write GeoTIFF to disk
             patch.rio.to_raster(
-                f"{args.img_output_dir}/{item.datetime.year}/patch_{batch_ids[i]}.tif",
+                f"{args.img_output_dir}/{item.datetime.year}/patch_{item.id}.tif",
                 driver="GTiff",
                 dtype=np.uint16,
                 compress="LZW",
@@ -243,12 +245,12 @@ def main(args):
             results.append(
                 (
                     idx,
-                    batch_idx[i],
                     xs[i],
                     ys[i],
-                    metadata["granule_id"],
-                    metadata["product_id"],
                     metadata["datetime"],
+                    metadata["id"],
+                    metadata["granule_id"],
+                    metadata["product_uri"],
                 )
             )
 
@@ -258,7 +260,7 @@ def main(args):
         # progress_bar.close()
 
     # Save all patch locations and sample info to CSV
-    df = pd.DataFrame(results, columns=["idx", "row", "x", "y", "granule_id", "product_id", "datetime"])
+    df = pd.DataFrame(results, columns=["idx", "x", "y", "datetime", "id", "granule_id", "product_uri"])
     df.to_csv(args.output_fn)
 
     # Print final stats
