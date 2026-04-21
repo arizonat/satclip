@@ -187,6 +187,7 @@ def main(args):
 
         for i, patch in enumerate(patches):
             # Filter patches with more than 10% missing data (this should already be handled by parquet)
+            item = items[i]
             num_channels = patch.shape[0]
             percent_empty = np.mean((np.isnan(patch.data)).sum(axis=0) == num_channels)
             percent_zero = np.mean((patch.data == 0).sum(axis=0) == num_channels)
@@ -205,6 +206,7 @@ def main(args):
                 "datetime": item.datetime.isoformat(),
                 "platform": item.properties.get("platform", ""),
                 "mgrs_tile": item.properties.get("s2:mgrs_tile", ""),
+                "product_id": item.properties.get("s2:product_id", ""),
                 "granule_id": item.properties.get("s2:granule_id", ""),
                 "orbit_state": item.properties.get("sat:orbit_state", ""),
                 "relative_orbit": str(item.properties.get("sat:relative_orbit", "")),
@@ -222,9 +224,11 @@ def main(args):
             # Attach metadata to the patch for inclusion in the raster tags
             patch.attrs.update(metadata)
 
+            os.makedirs(f"{args.img_output_dir}/{item.datetime.year}", exist_ok=True)
+
             # Write GeoTIFF to disk
             patch.rio.to_raster(
-                f"{args.img_output_dir}/patch_{batch_ids[i]}.tif",
+                f"{args.img_output_dir}/{item.datetime.year}/patch_{batch_ids[i]}.tif",
                 driver="GTiff",
                 dtype=np.uint16,
                 compress="LZW",
@@ -243,6 +247,8 @@ def main(args):
                     xs[i],
                     ys[i],
                     metadata["granule_id"],
+                    metadata["product_id"],
+                    metadata["datetime"],
                 )
             )
 
@@ -252,7 +258,7 @@ def main(args):
         # progress_bar.close()
 
     # Save all patch locations and sample info to CSV
-    df = pd.DataFrame(results, columns=["idx", "row", "x", "y", "granule_id"])
+    df = pd.DataFrame(results, columns=["idx", "row", "x", "y", "granule_id", "product_id", "datetime"])
     df.to_csv(args.output_fn)
 
     # Print final stats
