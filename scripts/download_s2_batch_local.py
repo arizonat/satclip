@@ -226,11 +226,12 @@ def main(args):
             # Attach metadata to the patch for inclusion in the raster tags
             patch.attrs.update(metadata)
 
-            os.makedirs(f"{args.img_output_dir}/{item.datetime.year}", exist_ok=True)
+            containing_dir = f"{args.img_output_dir}/images/{item.datetime.year}"
+            os.makedirs(containing_dir, exist_ok=True)
 
             # Write GeoTIFF to disk
             patch.rio.to_raster(
-                f"{args.img_output_dir}/{item.datetime.year}/patch_{item.id}.tif",
+                f"{containing_dir}/patch_{item.id}.tif",
                 driver="GTiff",
                 dtype=np.uint16,
                 compress="LZW",

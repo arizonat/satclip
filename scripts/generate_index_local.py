@@ -27,7 +27,7 @@ def main(root_dir):
             x, y = shape.centroid.xy
             x = x[0]
             y = y[0]
-            filename = pathlib.Path(url).name
+            filename = pathlib.Path(url).relative_to(root_dir/"images")
 
             timestamp = src.tags().get("datetime")
             granule_id = src.tags().get("granule_id")
