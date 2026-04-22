@@ -11,6 +11,7 @@ from pathlib import Path
 
 def main(root_dir):
     
+    root_dir = Path(root_dir)
     urls = Path(f"{root_dir}").rglob("*.tif")
 
     lats = []
