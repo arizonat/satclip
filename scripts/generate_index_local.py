@@ -1,4 +1,3 @@
-from azure.storage.blob import ContainerClient
 import rasterio
 import fiona
 from tqdm import tqdm
@@ -7,13 +6,12 @@ import pandas as pd
 import shapely.geometry
 import glob
 import pathlib
+import sys
+from pathlib import Path
 
-# ROOT = "/mnt/rolf-datastore/home/leca5365/Datasets/satclip-s2-temporal"
-ROOT = "/home/leca5365/Documents/satclip/scripts/"
-
-def main():
+def main(root_dir):
     
-    globs = glob.glob(f"{ROOT}/images/*/*.tif")
+    urls = Path(f"{root_dir}").rglob("*.tif")
 
     lats = []
     lons = []
@@ -21,7 +19,7 @@ def main():
     ids = []
     fns = []
 
-    for url in tqdm(globs):
+    for url in tqdm(urls):
         with rasterio.open(url) as src:
             geom = shapely.geometry.mapping(shapely.geometry.box(*src.bounds))
             warped_geom = fiona.transform.transform_geom(src.crs, "EPSG:4326", geom)
@@ -47,8 +45,9 @@ def main():
         "lon": lons,
         "ts": ts,
     })
-    df.to_csv(f"{ROOT}/index.csv", index=False)
+    df.to_csv(f"{root_dir}/index.csv", index=False)
 
 
 if __name__ == '__main__':
-    main()
+    ROOT = sys.argv[1]
+    main(ROOT)
