@@ -8,7 +8,6 @@ from lightning.pytorch.cli import LightningCLI
 from loss import SatCLIPLoss
 from st_loss import TemporalSatCLIPLoss
 from model import SatCLIP, TemporalSatCLIP
-import sys
 
 torch.set_float32_matmul_precision('high')
 
@@ -199,9 +198,9 @@ def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False
         datamodule=cli.datamodule,
     )
 
+
 if __name__ == "__main__":
-    # config_fn = "./configs/default.yaml"
-    config_fn = sys.argv[1]
+    config_fn = "./configs/default.yaml"
 
     #A100 go vroom vroom 🚗💨
     # if torch.cuda.get_device_name(device=0)=='NVIDIA A100 80GB PCIe':
