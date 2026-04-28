@@ -11,6 +11,7 @@ from pathlib import Path
 from math import ceil
 from tqdm import tqdm
 import sys
+import numpy as np
 
 # ── Config ────────────────────────────────────────────────────────────────────
 SRC_ROOT = Path(sys.argv[1])
@@ -37,14 +38,15 @@ for year_dir in tqdm(year_dirs, desc="Processing"):
         print(f"[{year_dir.name}] Only {n} images available — copying all.")
     else:
         # Uniform stride sample, then shuffle to avoid bias
-        stride   = n / N_SAMPLES
-        sampled  = [images[int(i * stride)] for i in range(N_SAMPLES)]
+        # stride   = n / N_SAMPLES
+        # sampled  = [images[int(i * stride)] for i in range(N_SAMPLES)]
+        sampled = np.random.choice(images, size=N_SAMPLES, replace=False)
         print(f"[{year_dir.name}] {n} images → sampling {N_SAMPLES} (stride={stride:.2f})")
 
     dst_dir = DST_ROOT / year_dir.name
     dst_dir.mkdir(parents=True, exist_ok=True)
 
-    for src in sampled:
+    for src in tqdm(sampled, desc=f"Copying {year_dir.name}", leave=False):
         shutil.copy2(src, dst_dir / src.name)
 
 print("\nDone.")
