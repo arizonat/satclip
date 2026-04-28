@@ -10,10 +10,11 @@ import random
 from pathlib import Path
 from math import ceil
 from tqdm import tqdm
+import sys
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SRC_ROOT = Path("dataset/images")
-DST_ROOT = Path("dataset_subset/images")
+SRC_ROOT = Path(sys.argv[1])
+DST_ROOT = Path(sys.argv[2])
 N_SAMPLES = 10_000
 SEED      = 42
 # ─────────────────────────────────────────────────────────────────────────────
