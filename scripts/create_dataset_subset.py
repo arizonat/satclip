@@ -41,7 +41,7 @@ for year_dir in tqdm(year_dirs, desc="Processing"):
         # stride   = n / N_SAMPLES
         # sampled  = [images[int(i * stride)] for i in range(N_SAMPLES)]
         sampled = np.random.choice(images, size=N_SAMPLES, replace=False)
-        print(f"[{year_dir.name}] {n} images → sampling {N_SAMPLES} (stride={stride:.2f})")
+        print(f"[{year_dir.name}] {n} images → sampling {N_SAMPLES}")
 
     dst_dir = DST_ROOT / year_dir.name
     dst_dir.mkdir(parents=True, exist_ok=True)
