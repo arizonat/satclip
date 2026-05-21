@@ -394,6 +394,7 @@ class SatCLIP(nn.Module):
 class TemporalSatCLIP(SatCLIP):
     def __init__(self,
                 embed_dim: int,
+                loss_type: str,
                 # vision
                 image_resolution: int,
                 vision_layers: Union[Tuple[int, int, int, int], int, str],
@@ -482,10 +483,9 @@ class TemporalSatCLIP(SatCLIP):
         ).double()
         
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        self.loss_type = loss_type
 
         self.initialize_parameters()
-
-
 
     def autocorrelations(self, coords, space_time_weight=0.5):
         # Returns W, [global_batch_size, global_batch_size]
@@ -521,10 +521,16 @@ class TemporalSatCLIP(SatCLIP):
         logits_per_location = logits_per_image.t()
 
         # autocorrelations
-        autocorrelations_per_image = self.autocorrelations(coords)
+        if self.loss_type == "soft_loss":
+            autocorrelations_per_image = self.autocorrelations(coords)
+        else:
+            autocorrelations_per_image = None
 
         # shape = [global_batch_size, global_batch_size]
-        return logits_per_image, logits_per_location, autocorrelations_per_image
+        if self.loss_type == "soft_loss":
+            return logits_per_image, logits_per_location, autocorrelations_per_image
+        else:
+            return logits_per_image, logits_per_location
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""

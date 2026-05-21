@@ -5,8 +5,7 @@ import lightning.pytorch
 import torch
 from datamodules.s2geo_dataset import S2GeoDataModule, S2GeoTemporalDataModule
 from lightning.pytorch.cli import LightningCLI
-from loss import SatCLIPLoss
-from st_loss import TemporalSatCLIPLoss
+from loss import SatCLIPLoss, SoftSatCLIPLoss
 from model import SatCLIP, TemporalSatCLIP
 
 torch.set_float32_matmul_precision('high')
@@ -18,6 +17,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def __init__(
         self,
         is_temporal: bool = False,
+        loss_type: str = "satclip_loss", # satclip_loss, soft_loss
         embed_dim=512,
         image_resolution=256,
         vision_layers=12,
@@ -61,8 +61,8 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 sh_embedding_dims=sh_embedding_dims,
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
+                loss_type=loss_type,
             )
-            self.loss_fun = TemporalSatCLIPLoss()
             self.is_temporal = True
         else:
             self.model = SatCLIP(
@@ -83,8 +83,17 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
             )
-            self.loss_fun = SatCLIPLoss()
             self.is_temporal = False
+
+        if loss_type == "soft_loss":
+            self.loss_type = "soft_loss"
+            self.loss_fun = SoftSatCLIPLoss()
+        elif loss_type == "satclip_loss":
+            self.loss_type = "satclip_loss"
+            self.loss_fun = SatCLIPLoss()
+
+        print(f"using loss function: {loss_type}")
+        print(f"using temporal model: {self.is_temporal}")
 
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -94,7 +103,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         images = batch["image"]
         t_points = batch["point"].float()
         
-        if self.is_temporal:
+        if self.loss_type == "soft_loss":
             logits_per_image, logits_per_coord, autocorrelations_per_image = self.model(images, t_points)
             loss = self.loss_fun(logits_per_image, logits_per_coord, autocorrelations_per_image)
         else:
@@ -105,6 +114,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def training_step(self, batch, batch_idx):
         loss = self.common_step(batch, batch_idx)
         self.log("train_loss", loss)
+        self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"])
         return loss
 
     def validation_step(self, batch, batch_idx):
@@ -148,21 +158,26 @@ class MyLightningCLI(LightningCLI):
     def add_arguments_to_parser(self, parser):
         parser.add_argument("--watchmodel", action="store_true")
 
-
-def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False):
+def cli_main(default_config_filename="./configs/default.yaml"):
     save_config_fn = default_config_filename.replace(".yaml", "-latest.yaml")
     # modify configs/default.yaml for learning rate etc.
 
+    # Parse the yaml config just for the datamodule to get the is_temporal flag, which determines which datamodule to use
+    import yaml
+    with open(default_config_filename, "r") as f:
+        config = yaml.safe_load(f)
+    is_temporal = config["model"]["is_temporal"]
+
     if is_temporal:
-        print("Using temporal model!")
+        print("Using temporal datamodule")
         datamodule_class = S2GeoTemporalDataModule
     else:
-        print("Using standard model!")
+        print("Using non-temporal datamodule")
         datamodule_class = S2GeoDataModule
 
     cli = MyLightningCLI(
         model_class=SatCLIPLightningModule,
-        datamodule_class=datamodule_class,
+        datamodule_class=datamodule_class,  # this will be overridden in MyLightningCLI.before_instantiate_classes
         save_config_kwargs=dict(
             config_filename=save_config_fn,
             overwrite=True,
@@ -177,7 +192,7 @@ def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False
     )
 
     ts = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-    if is_temporal:
+    if cli.config["model"]["is_temporal"]:
         run_name = f"SatCLIP_S2_Temporal_{ts}"
     else:
         run_name = f"SatCLIP_S2_{ts}"
@@ -198,7 +213,6 @@ def cli_main(default_config_filename="./configs/default.yaml", is_temporal=False
         datamodule=cli.datamodule,
     )
 
-
 if __name__ == "__main__":
     config_fn = "./configs/default.yaml"
 
@@ -208,4 +222,4 @@ if __name__ == "__main__":
     #     print('Superfastmode! 🚀')
     # else:
     #     torch.backends.cuda.matmul.allow_tf32 = False
-    cli_main(config_fn, is_temporal=True)
+    cli_main(config_fn)
