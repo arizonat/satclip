@@ -247,6 +247,7 @@ class VisionTransformer(nn.Module):
 
 class SatCLIP(nn.Module):
     def __init__(self,
+                 loss_type: str,
                  embed_dim: int,
                  # vision
                  image_resolution: int,
@@ -331,7 +332,27 @@ class SatCLIP(nn.Module):
         
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
+        self.loss_type = loss_type
+
         self.initialize_parameters()
+
+    def autocorrelations(self, coords, space_time_weight=0.5):
+        # Returns W, [global_batch_size, global_batch_size]
+        # Coords: [global_batch_size, 3]
+        device = coords.device
+        B = coords.shape[0]
+        spatial_correlations = torch.ones((B, B), device=device)
+        temporal_correlations = torch.ones((B, B), device=device)
+
+        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) + torch.eye(B, device=device), 0.0, 1.0)
+
+        # assumes times are already normalized [0,1]
+        dt = coords[:,2].unsqueeze(0) - coords[:,2].unsqueeze(1)
+        temporal_correlations = torch.clamp(torch.remainder(dt, 1.0), 0.0, 1.0)
+
+        autocorrelations =  space_time_weight * spatial_correlations + (1.0 - space_time_weight) * temporal_correlations
+
+        return autocorrelations
 
     def initialize_parameters(self):
         if isinstance(self.visual, ModifiedResNet):
@@ -360,10 +381,13 @@ class SatCLIP(nn.Module):
     def encode_location(self, coords):
         return self.location(coords.double())
 
+
     def forward(self, image, coords):
+        # Main difference with this forward over base, is that soft_loss also returns autocorrelations, which are used to weight the logits in the loss function
 
         image_features = self.encode_image(image)     
         location_features = self.encode_location(coords).float()
+        
         # normalized features
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
         location_features = location_features / location_features.norm(dim=1, keepdim=True)
@@ -373,8 +397,17 @@ class SatCLIP(nn.Module):
         logits_per_image = logit_scale * image_features @ location_features.t()
         logits_per_location = logits_per_image.t()
 
+        # autocorrelations
+        if self.loss_type == "soft_loss":
+            autocorrelations_per_image = self.autocorrelations(coords)
+        else:
+            autocorrelations_per_image = None
+
         # shape = [global_batch_size, global_batch_size]
-        return logits_per_image, logits_per_location
+        if self.loss_type == "soft_loss":
+            return logits_per_image, logits_per_location, autocorrelations_per_image
+        else:
+            return logits_per_image, logits_per_location
 
 def convert_weights(model: nn.Module):
     """Convert applicable model parameters to fp16"""

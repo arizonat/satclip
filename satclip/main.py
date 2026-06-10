@@ -5,7 +5,7 @@ import lightning.pytorch
 import torch
 from datamodules.s2geo_dataset import S2GeoDataModule
 from lightning.pytorch.cli import LightningCLI
-from loss import SatCLIPLoss
+from loss import SatCLIPLoss, SoftSatCLIPLoss
 from model import SatCLIP
 
 torch.set_float32_matmul_precision('high')
@@ -13,6 +13,7 @@ torch.set_float32_matmul_precision('high')
 class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def __init__(
         self,
+        loss_type="satclip_loss", # "satclip_loss" or "soft_loss"
         embed_dim=512,
         image_resolution=256,
         vision_layers=12,
@@ -35,6 +36,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         super().__init__()
 
         self.model = SatCLIP(
+            loss_type=loss_type,
             embed_dim=embed_dim,
             image_resolution=image_resolution,
             vision_layers=vision_layers,
@@ -53,7 +55,14 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
             capacity=capacity,
         )
 
-        self.loss_fun = SatCLIPLoss()
+        if loss_type == "soft_loss":
+            self.loss_type = "soft_loss"
+            self.loss_fun = SoftSatCLIPLoss()
+        elif loss_type == "satclip_loss":
+            self.loss_type = "satclip_loss"
+            self.loss_fun = SatCLIPLoss()
+        print(f"using loss function: {loss_type}")
+
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.save_hyperparameters()
@@ -61,8 +70,14 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
     def common_step(self, batch, batch_idx):
         images = batch["image"]
         t_points = batch["point"].float()
-        logits_per_image, logits_per_coord = self.model(images, t_points)
-        return self.loss_fun(logits_per_image, logits_per_coord)
+
+        if self.loss_type == "soft_loss":
+            logits_per_image, logits_per_coord, autocorrelations_per_image = self.model(images, t_points)
+            loss = self.loss_fun(logits_per_image, logits_per_coord, autocorrelations_per_image)
+        else:
+            logits_per_image, logits_per_coord = self.model(images, t_points)
+            loss = self.loss_fun(logits_per_image, logits_per_coord)
+        return loss
 
     def training_step(self, batch, batch_idx):
         loss = self.common_step(batch, batch_idx)
