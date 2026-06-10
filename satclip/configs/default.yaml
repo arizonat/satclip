@@ -4,9 +4,9 @@ trainer:
   logger:
     class_path: lightning.pytorch.loggers.TensorBoardLogger
     init_args:
-      save_dir: 'satclip_logs'
-      name: 'satclip'
-      version: 'satclip'
+      save_dir: 'satclip_softloss_logs'
+      name: 'satclip_softloss'
+      version: 'satclip_softloss'
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
@@ -15,6 +15,7 @@ trainer:
         filename: "{epoch}-{val_loss:.2f}"
   max_epochs: 500
 model:
+  loss_type: soft_loss
   embed_dim: 256
   image_resolution: 256
   vision_layers: 4
