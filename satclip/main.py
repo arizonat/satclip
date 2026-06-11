@@ -31,6 +31,8 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         learning_rate=1e-4,
         weight_decay=0.01,
         num_hidden_layers=2,
+        loss_weight_type="linear", # "linear", "exponential", or "sigmoid"
+        loss_weight_rho=1.0,
         capacity=256,
     ) -> None:
         super().__init__()
@@ -53,6 +55,8 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
             sh_embedding_dims=sh_embedding_dims,
             num_hidden_layers=num_hidden_layers,
             capacity=capacity,
+            weight_type=loss_weight_type,
+            weight_rho=loss_weight_rho,
         )
 
         if loss_type == "soft_loss":
@@ -65,6 +69,9 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
 
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+
+        print(f"using loss weight type: {loss_weight_type} with rho={loss_weight_rho}")
+
         self.save_hyperparameters()
 
     def common_step(self, batch, batch_idx):

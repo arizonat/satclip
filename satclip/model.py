@@ -13,9 +13,11 @@ from torchgeo.models import ResNet18_Weights, ResNet50_Weights, ViTSmall16_Weigh
 from location_encoder import get_positional_encoding, get_neural_network, LocationEncoder
 from datamodules.s2geo_dataset import S2Geo
 
+EARTH_RADIUS = 6378 # km, near equator
+MAX_EARTH_DIST = torch.pi * EARTH_RADIUS # max distance between two points on earth is half the circumference, this is used to normalize distances to [0,1] for the linear weighting function
+
 def pairwise_haversine_dist(coords):
     #todo: the earth radius adjustment probably unnecessary, and/or use Vincenty's formula
-    EARTH_RADIUS = 6378 # km, near equator
     lon = torch.deg2rad(coords[:,0])
     lat = torch.deg2rad(coords[:,1])
 
@@ -281,6 +283,8 @@ class SatCLIP(nn.Module):
                  ffn: bool=True,
                  num_hidden_layers: int=2,
                  capacity: int=256,
+                 weight_rho: float=1.0,
+                 weight_type: str="linear",
                  *args,
                  **kwargs
                  ):
@@ -346,22 +350,43 @@ class SatCLIP(nn.Module):
         
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
+        # Loss parameters
         self.loss_type = loss_type
+        self.weight_type = weight_type
+        self.weight_rho = weight_rho
 
         self.initialize_parameters()
 
-    def autocorrelations(self, coords):
+    def pairwise_weights(self, coords, rho=1.0, weight_type="linear"):
         # Returns W, [global_batch_size, global_batch_size]
         # Coords: [global_batch_size, 3]
         device = coords.device
         B = coords.shape[0]
-        spatial_correlations = torch.ones((B, B), device=device)
 
-        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) + torch.eye(B, device=device), 0.0, 1.0)
+        # intialize as if equal weighting, which is the default satclip loss
+        spatial_weights = torch.ones((B, B), device=device)
 
-        autocorrelations =  spatial_correlations 
+        if weight_type is None or weight_type == "none":
+            return spatial_weights
+        
+        elif weight_type == "linear":
+            spatial_weights = pairwise_haversine_dist(coords) / (MAX_EARTH_DIST * rho)
 
-        return autocorrelations
+        elif weight_type == "exponential":
+            nd = pairwise_haversine_dist(coords) / MAX_EARTH_DIST
+            spatial_weights = (torch.exp(rho * nd) - 1) / (torch.exp(torch.tensor(rho)) - 1)
+
+        elif weight_type == "sigmoid":
+            nd = pairwise_haversine_dist(coords) / MAX_EARTH_DIST
+            spatial_weights = nd ** rho / (nd ** rho + (1 - nd) ** rho)
+
+        else:
+            raise NotImplementedError(f"weight type {weight_type} not implemented")
+
+        spatial_weights.fill_diagonal_(1.0) # ensure self-pairs have weight 1
+        pairwise_weights =  torch.clamp(spatial_weights, 0.0, 1.0)
+
+        return pairwise_weights
 
     def initialize_parameters(self):
         if isinstance(self.visual, ModifiedResNet):
@@ -392,7 +417,7 @@ class SatCLIP(nn.Module):
 
 
     def forward(self, image, coords):
-        # Main difference with this forward over base, is that soft_loss also returns autocorrelations, which are used to weight the logits in the loss function
+        # Main difference with this forward over base, is that soft_loss also returns weighting function, which are used to weight the logits in the loss function
 
         image_features = self.encode_image(image)     
         location_features = self.encode_location(coords).float()
@@ -406,15 +431,11 @@ class SatCLIP(nn.Module):
         logits_per_image = logit_scale * image_features @ location_features.t()
         logits_per_location = logits_per_image.t()
 
-        # autocorrelations
-        if self.loss_type == "soft_loss":
-            autocorrelations_per_image = self.autocorrelations(coords)
-        else:
-            autocorrelations_per_image = None
-
         # shape = [global_batch_size, global_batch_size]
         if self.loss_type == "soft_loss":
-            return logits_per_image, logits_per_location, autocorrelations_per_image
+            pairwise_weights_per_image = self.pairwise_weights(coords, weight_type=self.weight_type, rho=self.weight_rho)
+            return logits_per_image, logits_per_location, pairwise_weights_per_image
+        
         else:
             return logits_per_image, logits_per_location
 
