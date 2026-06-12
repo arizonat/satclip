@@ -13,9 +13,10 @@ from torchgeo.models import ResNet18_Weights, ResNet50_Weights, ViTSmall16_Weigh
 from location_encoder import get_positional_encoding, get_neural_network, LocationEncoder, get_temporal_encoding, SpatioTemporalEncoder
 from datamodules.s2geo_dataset import S2Geo
 
+EARTH_RADIUS = 6378 # km, near equator
+
 def pairwise_haversine_dist(coords):
     #todo: the earth radius adjustment probably unnecessary, and/or use Vincenty's formula
-    EARTH_RADIUS = 6378 # km, near equator
     lon = torch.deg2rad(coords[:,0])
     lat = torch.deg2rad(coords[:,1])
 
@@ -495,13 +496,16 @@ class TemporalSatCLIP(SatCLIP):
         spatial_correlations = torch.ones((B, B), device=device)
         temporal_correlations = torch.ones((B, B), device=device)
 
-        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) + torch.eye(B, device=device), 0.0, 1.0)
+        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) / (torch.pi * EARTH_RADIUS), 0.0, 1.0)
+        spatial_correlations.fill_diagonal_(1.0)
 
         # assumes times are already normalized [0,1]
         dt = coords[:,2].unsqueeze(0) - coords[:,2].unsqueeze(1)
         temporal_correlations = torch.clamp(torch.remainder(dt, 1.0), 0.0, 1.0)
+        temporal_correlations.fill_diagonal_(1.0)
 
         autocorrelations =  space_time_weight * spatial_correlations + (1.0 - space_time_weight) * temporal_correlations
+        autocorrelations.fill_diagonal_(1.0)
 
         return autocorrelations
 
