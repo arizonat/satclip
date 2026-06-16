@@ -8,6 +8,8 @@ from lightning.pytorch.cli import LightningCLI
 from loss import SatCLIPLoss, SoftSatCLIPLoss
 from model import SatCLIP, TemporalSatCLIP
 
+from pytorch_lightning.loggers import WandbLogger
+
 torch.set_float32_matmul_precision('high')
 
 # print("Setting anomaly detection to True")
@@ -113,7 +115,8 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.common_step(batch, batch_idx)
-        self.log("train_loss", loss)
+        self.log("train_loss", loss, on_step=True)
+        self.log("epoch_train_loss", loss, on_epoch=True, prog_bar=True)
         self.log("lr", self.trainer.optimizers[0].param_groups[0]["lr"])
         return loss
 
@@ -197,10 +200,16 @@ def cli_main(default_config_filename="./configs/default.yaml"):
     else:
         run_name = f"SatCLIP_S2_{ts}"
 
-    if cli.trainer.logger is not None:
-        cli.trainer.logger.experiment.name = run_name
-        # this seems to be necessary to force logging of datamodule hyperparams
-        cli.trainer.logger.log_hyperparams(cli.datamodule.hparams)
+    for logger in cli.trainer.loggers:
+        if isinstance(logger, WandbLogger):
+            logger.experiment.name = run_name
+        logger.log_hyperparams(cli.datamodule.hparams)
+
+    # if cli.trainer.logger is not None:
+    #     cli.trainer.logger.experiment.name = run_name
+
+    #     # this seems to be necessary to force logging of datamodule hyperparams
+    #     cli.trainer.logger.log_hyperparams(cli.datamodule.hparams)
 
     # Create folder to log configs
     # NOTE: Lightning does not handle config paths with subfolders
