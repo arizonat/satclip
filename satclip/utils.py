@@ -21,6 +21,25 @@ def checkerboard_splits(coords, grid_size, dim=-1):
     splits = ((coords // grid_size).sum(dim=dim) % 2).unsqueeze(dim).to(torch.int8)
 
     return splits
+
+def temporal_splits(coords, temporal_grid_size):
+    """
+    Creates temporal splits for spatial cross-validation based on the provided coordinates and temporal grid size.
+
+    Args:
+        coords (torch.Tensor): Tensor of shape (..., 1) containing time coordinates.
+        temporal_grid_size (float): Size of the temporal grid cells (e.g. in days).
+
+    Returns:
+        torch.Tensor: Tensor of shape (..., 1) containing split assignments (0 or 1) for each point based on the temporal pattern.
+    """
+
+    if temporal_grid_size <= 0:
+        return torch.ones_like(coords, dtype=torch.int8)
+
+    splits = ((coords // temporal_grid_size) % 2).to(torch.int8)
+ 
+    return splits
     
 def spatiotemporal_checkerboard_splits(coords, spatial_grid_size, temporal_grid_size):
     """
