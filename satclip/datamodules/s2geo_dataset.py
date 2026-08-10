@@ -89,6 +89,7 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
         val_random_split_fraction: float = 0.1,
         transform: str = 'pretrained',
         mode: str = "both",
+        temporal_encoding: Optional[str] = "normalized_day_of_year"
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -103,10 +104,11 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
             
         self.val_random_split_fraction = val_random_split_fraction
         self.mode = mode
+        self.temporal_encoding = temporal_encoding
         self.save_hyperparameters()
 
     def setup(self, stage="fit"):
-        dataset = S2GeoTemporal(root=self.data_dir, transform=self.train_transform, mode=self.mode)
+        dataset = S2GeoTemporal(root=self.data_dir, transform=self.train_transform, mode=self.mode, temporal_encoding=self.temporal_encoding)
 
         N_val = int(len(dataset) * self.val_random_split_fraction)
         N_train = len(dataset) - N_val
@@ -286,6 +288,17 @@ class S2GeoTemporal(S2Geo):
                 (df.iloc[i]["lon"], df.iloc[i]["lat"], t)
             )
 
+        # Iterate through points and correct time values for normalized_posix_timestamp if necessary
+        if temporal_encoding == "normalized_posix_timestamp":
+            # Get min and max timestamps
+            timestamps = [p[2] for p in self.points]
+            min_ts = min(timestamps)
+            max_ts = max(timestamps)
+            print(f"Normalizing timestamps from [{min_ts}, {max_ts}] to [0,1]")
+
+            # Normalize timestamps to [0,1]
+            self.points = [(p[0], p[1], (p[2]-min_ts)/(max_ts-min_ts)) for p in self.points]
+
         print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
             f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
         
@@ -314,6 +327,10 @@ class S2GeoTemporal(S2Geo):
         
         elif temporal_encoding == "posix_timestamp":
             # POSIX timestamp from UTC, as float (seconds since epoch)
+            return dt.timestamp()
+
+        elif temporal_encoding == "normalized_posix_timestamp":
+            # POSIX timestamp from UTC, as float (seconds since epoch), normalization handled outside this function
             return dt.timestamp()
         
         else:

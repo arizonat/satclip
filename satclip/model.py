@@ -14,6 +14,7 @@ from location_encoder import get_positional_encoding, get_neural_network, Locati
 from datamodules.s2geo_dataset import S2Geo
 
 EARTH_RADIUS = 6378 # km, near equator
+ANTIPODAL_EARTH_DISTANCE = torch.pi * EARTH_RADIUS # km, half circumference of earth/antipodal distance
 
 def pairwise_haversine_dist(coords):
     #todo: the earth radius adjustment probably unnecessary, and/or use Vincenty's formula
@@ -496,7 +497,7 @@ class TemporalSatCLIP(SatCLIP):
         spatial_correlations = torch.ones((B, B), device=device)
         temporal_correlations = torch.ones((B, B), device=device)
 
-        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) / (torch.pi * EARTH_RADIUS), 0.0, 1.0)
+        spatial_correlations = torch.clamp(pairwise_haversine_dist(coords) / (ANTIPODAL_EARTH_DISTANCE), 0.0, 1.0)
         spatial_correlations.fill_diagonal_(1.0)
 
         # assumes times are already normalized [0,1]

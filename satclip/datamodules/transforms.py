@@ -143,6 +143,28 @@ def get_pretrained_s2_train_transform_temporal(resize_crop_size = 256):
 
     return transform
 
+def get_pretrained_terrafm_s2_train_transform_temporal(resize_crop_size = 256):
+    augmentation = T.Compose([
+        T.RandomCrop(resize_crop_size),
+        T.RandomHorizontalFlip(),
+        T.RandomVerticalFlip(),
+        T.GaussianBlur(3),
+    ])
+
+    def transform(sample):
+        image = sample["image"] / 10000.0
+        point = sample["point"]
+
+        image = torch.tensor(image)
+
+        image = augmentation(image)
+
+        point[:2] = coordinate_jitter(point[:2]) # only jitter spatial coordinate
+
+        return dict(image=image, point=point)
+
+    return transform
+
 def coordinate_jitter(
         point,
         radius=0.01 # approximately 1 km

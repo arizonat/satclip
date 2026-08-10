@@ -5,14 +5,14 @@ trainer:
     - class_path: lightning.pytorch.loggers.TensorBoardLogger
       init_args:
         save_dir: 'satclip_temporal_logs'
-        name: 'satclip-s2-satcliploss-1M'
-        version: 'satclip-s2-satcliploss-1M'
+        name: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
+        version: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
     - class_path: lightning.pytorch.loggers.WandbLogger
       init_args:
         save_dir: 'satclip_temporal_logs'
-        project: 'satclip-s2-satcliploss-1M'
-        name: 'satclip-s2-satcliploss-1M'
-        version: 'satclip-s2-satcliploss-1M'
+        project: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
+        name: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
+        version: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
@@ -42,8 +42,10 @@ model:
   capacity: 256
 data:
   data_dir: /mnt/DATA/leca5365/satclip-s2-1M-2.0
+  temporal_encoding: 'normalized_posix_timestamp' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp'
   batch_size: 4096
   num_workers: 8
   val_random_split_fraction: 0.1
   crop_size: 224
+  transform: "pretrained" # options: "pretrained", "default", "pretrained_terrafm"
 watchmodel: True
