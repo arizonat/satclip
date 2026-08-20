@@ -124,8 +124,37 @@ def load_temporal_satclip_doy_model(model_name: str = "tsatclip/doy",
                                   ckpt_path=ckpt_path, 
                                   device=device)
 
-_REGISTERED_MODELS = {
-    "tsatclip/linear": load_temporal_satclip_linear_model,
-    "tsatclip/doy": load_temporal_satclip_doy_model,
-    "gtloc": load_gtloc_model
-}
+class DumbModelWrapper(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embedding_dim = 3  # lat, lon, time
+
+    def forward(self, x):
+        # Just passes x through
+        return x
+
+class SinCosWrapper(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embedding_dim = 4  # lat, lon, sin_time, cos_time
+
+    def forward(self, x):
+        # Wrapper expects (N, [lat, lon, time]) and returns embeddings
+        # The SinCos model expects (N, [lon, lat, posix_time]) and returns embeddings
+
+        x = x.clone()
+        posix_time = x[..., 2]
+
+        # Convert posix time to sin/cos representation
+        sin_time = torch.sin(2 * torch.pi * posix_time / 31556926)
+        cos_time = torch.cos(2 * torch.pi * posix_time / 31556926)
+
+        # Concatenate lat, lon, sin_time, cos_time
+        embeddings = torch.cat([x[..., :2], sin_time.unsqueeze(-1), cos_time.unsqueeze(-1)], dim=-1)
+        return embeddings
+
+# _REGISTERED_MODELS = {
+#     "tsatclip/linear": load_temporal_satclip_linear_model,
+#     "tsatclip/doy": load_temporal_satclip_doy_model,
+#     "gtloc": load_gtloc_model
+# }
