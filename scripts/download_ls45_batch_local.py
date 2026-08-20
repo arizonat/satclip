@@ -268,7 +268,6 @@ def main(args):
     print(f"num error hits: {num_error_hits}")
     print(f"num retries: {num_retries}")
 
-
 if __name__ == "__main__":
     parser = set_up_parser()
     args = parser.parse_args()
