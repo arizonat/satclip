@@ -17,7 +17,14 @@ SEEDS = [42, 123, 456, 789]
 
 # List of models to run
 # MODELS = ["tsatclip-linear", "gtloc", "climplicit"]
-MODELS = ["tsatclip/linear", "gtloc", "tsatclip/doy", "sin-cos", "dumb"]
+MODELS = ["tsatclip/linear", "gtloc", "tsatclip/doy", "sin-cos", "simplest"]
+
+# In Lat/Lon Degrees
+SPATIAL_DELTAS = [2, 4, 8, 16, 32]
+
+# In seconds
+TEMPORAL_DELTAS_DAYS = [1, 7, 30, 90]
+TEMPORAL_DELTAS = [days * 24 * 60 * 60 for days in TEMPORAL_DELTAS_DAYS]
 
 # List of datasets to run
 #DATASETS = ["ghcnd", "chelsa", "era5"]
@@ -162,10 +169,11 @@ _REGISTERED_MODELS = {
     "tsatclip/doy": load_temporal_satclip_doy_model,
     "gtloc": load_gtloc_model,
     "sin-cos": lambda device="cuda": SinCosWrapper().to(device),
+    "simplest": lambda device="cuda": SimplestModelWrapper().to(device),
     "dumb": lambda device="cuda": DumbModelWrapper().to(device),
 }
 
-def run_evaluation(seed, model, dataset, cv_type, metric, device="cuda", results_dir="results"):
+def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cuda", results_dir="results"):
     """
     Runs a single evaluation on a given dataset and model.
     """
@@ -186,7 +194,7 @@ def run_evaluation(seed, model, dataset, cv_type, metric, device="cuda", results
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-    print(f"Loading model {model} and dataset {dataset} with cv_type {cv_type} and metric {metric}.")
+    print(f"Running eval: model {model} | dataset {dataset} | cv_type {cv_type} | delta {delta} | metric {metric}.")
     model_loader = _REGISTERED_MODELS[model]
     dataset_loader = _REGISTERED_DATASET[dataset]
 
@@ -210,7 +218,7 @@ def run_evaluation(seed, model, dataset, cv_type, metric, device="cuda", results
 
     elif cv_type == "spatial":
         # Spatially split the dataset into train and test sets
-        spatial_grid_size = 1.0  # degrees
+        spatial_grid_size = delta if delta is not None else 1.0  # degrees
         splits = checkerboard_splits(dataset[:, :2], spatial_grid_size, dim=-1)
         train_indices = (splits == 0).squeeze()
         test_indices = (splits == 1).squeeze()
@@ -218,7 +226,7 @@ def run_evaluation(seed, model, dataset, cv_type, metric, device="cuda", results
     elif cv_type == "temporal":
         # Temporally split the dataset into train and test sets
         # temporal_grid_size = 365.0 * 24 * 60 * 60  # seconds in a year
-        temporal_grid_size = 30.0 * 24 * 60 * 60  # seconds in a month
+        temporal_grid_size = delta if delta is not None else 30.0 * 24 * 60 * 60  # seconds in a month
         splits = temporal_splits(dataset[:, 2], temporal_grid_size)
         train_indices = (splits == 0).squeeze()
         test_indices = (splits == 1).squeeze()
@@ -241,40 +249,66 @@ def main():
     Main function to run evaluations across all combinations of models, datasets, metrics, and seeds.
     """
 
-    # cv_types = CV_TYPES
-    # seeds = SEEDS
-    # datasets = DATASETS
-    # models = MODELS
-    # metrics = METRICS
-
     cv_types = ["uar","spatial","temporal"]
     seeds = [42, 156223, 4456, 7809, 100123]
     datasets = ["ghcnd"]
-    models = ["tsatclip/doy", "tsatclip/linear", "gtloc", "sin-cos", "dumb"]
+    models = ["tsatclip/doy", "tsatclip/linear", "gtloc", "sin-cos", "simplest"]
     metrics = ["linear-probe"]
 
     results = {}
 
-    results_df = pd.DataFrame(columns=["seed", "model", "dataset", "cv_type", "metric", "test_rmse"])
+    results_df = pd.DataFrame(columns=["seed", "model", "dataset", "cv_type", "metric", "test_rmse", "delta"])
 
     for seed in seeds:
         for model in models:
             for dataset in datasets:
                 for cv_type in cv_types:
                     for metric in metrics:
-                        evals = run_evaluation(seed, model, dataset, cv_type, metric, device="cuda", results_dir="results")
-                        results[(seed, model, dataset, cv_type, metric)] = evals["eval"]["test_rmse"]
+                        if cv_type == "spatial":
+                            for delta in SPATIAL_DELTAS:
+                                evals = run_evaluation(seed, model, dataset, cv_type, metric, delta=delta, device="cuda", results_dir="results")
+                                results[(seed, model, dataset, cv_type, metric, delta)] = evals["eval"]["test_rmse"]
 
-                        new_row = pd.DataFrame([{
-                            "seed": seed,
-                            "model": model,
-                            "dataset": dataset,
-                            "cv_type": cv_type,
-                            "metric": metric,
-                            "test_rmse": evals["eval"]["test_rmse"]/10
-                        }])
+                                new_row = pd.DataFrame([{
+                                    "seed": seed,
+                                    "model": model,
+                                    "dataset": dataset,
+                                    "cv_type": cv_type,
+                                    "metric": metric,
+                                    "delta": delta if cv_type in ["spatial", "temporal"] else None,
+                                    "test_rmse": evals["eval"]["test_rmse"]/10
+                                }])
+                                results_df = pd.concat([results_df, new_row], ignore_index=True)
+                        elif cv_type == "temporal":
+                            for delta in TEMPORAL_DELTAS:
+                                evals = run_evaluation(seed, model, dataset, cv_type, metric, delta=delta, device="cuda", results_dir="results")
+                                results[(seed, model, dataset, cv_type, metric, delta)] = evals["eval"]["test_rmse"]
 
-                        results_df = pd.concat([results_df, new_row], ignore_index=True)
+                                new_row = pd.DataFrame([{
+                                    "seed": seed,
+                                    "model": model,
+                                    "dataset": dataset,
+                                    "cv_type": cv_type,
+                                    "metric": metric,
+                                    "delta": delta if cv_type in ["spatial", "temporal"] else None,
+                                    "test_rmse": evals["eval"]["test_rmse"]/10
+                                }])
+                                results_df = pd.concat([results_df, new_row], ignore_index=True)
+                        else:
+                            evals = run_evaluation(seed, model, dataset, cv_type, metric, device="cuda", results_dir="results")
+                            results[(seed, model, dataset, cv_type, metric)] = evals["eval"]["test_rmse"]
+
+                            new_row = pd.DataFrame([{
+                                "seed": seed,
+                                "model": model,
+                                "dataset": dataset,
+                                "cv_type": cv_type,
+                                "metric": metric,
+                                "delta": delta if cv_type in ["spatial", "temporal"] else None,
+                                "test_rmse": evals["eval"]["test_rmse"]/10
+                            }])
+
+                            results_df = pd.concat([results_df, new_row], ignore_index=True)
 
 
     # Save results to a file

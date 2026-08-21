@@ -124,7 +124,7 @@ def load_temporal_satclip_doy_model(model_name: str = "tsatclip/doy",
                                   ckpt_path=ckpt_path, 
                                   device=device)
 
-class DumbModelWrapper(nn.Module):
+class SimplestModelWrapper(nn.Module):
     def __init__(self):
         super().__init__()
         self.embedding_dim = 3  # lat, lon, time
