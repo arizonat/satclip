@@ -24,9 +24,9 @@ trainer:
   max_epochs: 500
 model:
   is_temporal: True
-  loss_type: 'satclip_loss'
+  loss_type: 'satclip_loss' # options: 'satclip_loss', 'soft_loss'
   te_type: 'fourier'
-  tpe_type: 'toroidal'
+  temporal_loss: 'euclidean' # options: 'euclidean', 'toroidal' (ignored if not using soft_loss)
   te_k: 10
   embed_dim: 256
   image_resolution: 224
