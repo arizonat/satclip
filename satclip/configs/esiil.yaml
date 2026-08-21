@@ -5,25 +5,28 @@ trainer:
     - class_path: lightning.pytorch.loggers.TensorBoardLogger
       init_args:
         save_dir: 'satclip_temporal_logs'
-        name: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
-        version: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
+        name: 'satclip-s2-satcliploss-1M-lineartime'
+        version: 'satclip-s2-satcliploss-1M-lineartime'
     - class_path: lightning.pytorch.loggers.WandbLogger
       init_args:
         save_dir: 'satclip_temporal_logs'
-        project: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
-        name: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
-        version: 'satclip-s2-satcliploss-1M-normalized_posix_timestamp'
+        project: 'satclip-s2-satcliploss-1M-lineartime'
+        name: 'satclip-s2-satcliploss-1M-lineartime'
+        version: 'satclip-s2-satcliploss-1M-lineartime'
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
         monitor: "val_loss"
         save_last: True
+        save_top_k: -1
+        every_n_epochs: 50
         filename: "{epoch}-{val_loss:.2f}"
   max_epochs: 500
 model:
   is_temporal: True
   loss_type: 'satclip_loss'
   te_type: 'fourier'
+  tpe_type: 'toroidal'
   te_k: 10
   embed_dim: 256
   image_resolution: 224
@@ -42,7 +45,7 @@ model:
   capacity: 256
 data:
   data_dir: /mnt/DATA/leca5365/satclip-s2-1M-2.0
-  temporal_encoding: 'normalized_posix_timestamp' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp'
+  temporal_encoding: 'normalized_posix_timestamp' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
   batch_size: 4096
   num_workers: 8
   val_random_split_fraction: 0.1
