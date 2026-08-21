@@ -15,10 +15,9 @@ from torch.utils.data import DataLoader
 from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform, get_s2_train_transform_temporal, get_pretrained_s2_train_transform_temporal
 
 import datetime
+import calendar
 
 CHECK_MIN_FILESIZE = 10000 # 10kb
-
-
 
 class S2GeoDataModule(pl.LightningDataModule):
     def __init__(
@@ -261,6 +260,8 @@ class S2GeoTemporal(S2Geo):
         self.root = root
         self.transform = transform
         self.mode = mode
+        self.temporal_encoding = temporal_encoding
+
         if not self._check_integrity():
             raise RuntimeError("Dataset not found or corrupted.")
 
@@ -271,7 +272,7 @@ class S2GeoTemporal(S2Geo):
         self.points = []
 
         n_skipped_files = 0
-        print("Parsing with temporal encoding:", temporal_encoding)
+        print("Parsing with temporal encoding:", self.temporal_encoding)
         for i in range(df.shape[0]):
             filename = os.path.join(self.root, "images", df.iloc[i]["fn"])
 
@@ -282,14 +283,17 @@ class S2GeoTemporal(S2Geo):
             self.filenames.append(filename)
 
             # Parse S2 timestamp to POSIX time, note that S2 timestamps are in UTC and up to the second anyway
-            t = self.parse_time(df.iloc[i]["ts"], temporal_encoding = temporal_encoding)
+            t = self.parse_time(df.iloc[i]["ts"], temporal_encoding = self.temporal_encoding)
 
-            self.points.append(
-                (df.iloc[i]["lon"], df.iloc[i]["lat"], t)
-            )
+            if type(t) == tuple:
+                pt = (df.iloc[i]["lon"], df.iloc[i]["lat"]) + t
+            else:
+                pt = (df.iloc[i]["lon"], df.iloc[i]["lat"], t)
+
+            self.points.append(pt)
 
         # Iterate through points and correct time values for normalized_posix_timestamp if necessary
-        if temporal_encoding == "normalized_posix_timestamp":
+        if self.temporal_encoding == "normalized_posix_timestamp":
             # Get min and max timestamps
             timestamps = [p[2] for p in self.points]
             min_ts = min(timestamps)
@@ -332,6 +336,13 @@ class S2GeoTemporal(S2Geo):
         elif temporal_encoding == "normalized_posix_timestamp":
             # POSIX timestamp from UTC, as float (seconds since epoch), normalization handled outside this function
             return dt.timestamp()
+
+        elif temporal_encoding == "toroidal":
+            t_tuple = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+            doms = calendar.monthrange(dt.year, dt.month)
+            norm_month = (1/12) * ((t_tuple[1]-1) + (t_tuple[2]-1)/doms[1])
+            norm_hour = (1/24) * t_tuple[3]
+            return (norm_month, norm_hour)
         
         else:
             return dt.timestamp()
