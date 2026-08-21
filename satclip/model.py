@@ -13,6 +13,8 @@ from torchgeo.models import ResNet18_Weights, ResNet50_Weights, ViTSmall16_Weigh
 from location_encoder import get_positional_encoding, get_neural_network, LocationEncoder, get_temporal_encoding, SpatioTemporalEncoder
 from datamodules.s2geo_dataset import S2Geo
 
+import datetime
+
 EARTH_RADIUS = 6378 # km, near equator
 ANTIPODAL_EARTH_DISTANCE = torch.pi * EARTH_RADIUS # km, half circumference of earth/antipodal distance
 
@@ -111,7 +113,6 @@ class AttentionPool2d(nn.Module):
             need_weights=False
         )
         return x.squeeze(0)
-
 
 class ModifiedResNet(nn.Module):
     """
@@ -346,6 +347,7 @@ class SatCLIP(nn.Module):
         ).double()
         
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        self.tpe_type = tpe_type
 
         self.initialize_parameters()
 
@@ -404,9 +406,10 @@ class TemporalSatCLIP(SatCLIP):
                 vision_patch_size: int,
                 in_channels: int,
                 # location
-                le_type: str,
-                pe_type: str,
-                te_type: str,
+                le_type: str, # location encoding type
+                pe_type: str, # positional encoding type
+                te_type: str, # temporal encoding type
+                temporal_loss: str, # temporal loss type
                 frequency_num: int, 
                 max_radius: int,  
                 min_radius: int,
@@ -483,11 +486,23 @@ class TemporalSatCLIP(SatCLIP):
                                         self.tempenc,
                                         self.nnet
         ).double()
-        
+
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        self.temporal_loss = temporal_loss
         self.loss_type = loss_type
 
         self.initialize_parameters()
+
+    def toroidal_distance(self, normalized_month_hour_coords):
+        # assumes times are in normalized month-hour timestamps
+        theta = normalized_month_hour_coords[:,0].unsqueeze(0) 
+        phi = normalized_month_hour_coords[:,1].unsqueeze(0)
+
+        dtheta = theta.unsqueeze(0) - theta.unsqueeze(1)
+        dphi = phi.unsqueeze(0) - phi.unsqueeze(1)
+
+        dt = torch.sqrt(torch.square(torch.min(dtheta, 1.0 - dtheta)) +torch.square(torch.min(dphi, 1.0 - dphi)))
+        return torch.clamp(dt, 0.0, 1.0)
 
     def autocorrelations(self, coords, space_time_weight=0.5):
         # Returns W, [global_batch_size, global_batch_size]
@@ -501,8 +516,11 @@ class TemporalSatCLIP(SatCLIP):
         spatial_correlations.fill_diagonal_(1.0)
 
         # assumes times are already normalized [0,1]
-        dt = coords[:,2].unsqueeze(0) - coords[:,2].unsqueeze(1)
-        temporal_correlations = torch.clamp(torch.remainder(dt, 1.0), 0.0, 1.0)
+        if self.temporal_loss == "toroidal":
+            temporal_correlations = 1 - self.toroidal_distance(coords[:,2:4]) # make it a weighted correlation instead of distance
+        else:
+            dt = coords[:,2].unsqueeze(0) - coords[:,2].unsqueeze(1)
+            temporal_correlations = torch.clamp(torch.remainder(dt, 1.0), 0.0, 1.0)
         temporal_correlations.fill_diagonal_(1.0)
 
         autocorrelations =  space_time_weight * spatial_correlations + (1.0 - space_time_weight) * temporal_correlations
@@ -511,7 +529,6 @@ class TemporalSatCLIP(SatCLIP):
         return autocorrelations
 
     def forward(self, image, coords):
-        # Main difference with this forward over base, is that 
 
         image_features = self.encode_image(image)     
         location_features = self.encode_location(coords).float()
