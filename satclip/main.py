@@ -40,6 +40,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         weight_decay=0.01,
         num_hidden_layers=2,
         capacity=256,
+        temporal_loss=None,
     ) -> None:
         super().__init__()
 
@@ -55,6 +56,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 pe_type=pe_type,
                 te_type=te_type,
                 te_k=te_k,
+                temporal_loss=temporal_loss,
                 frequency_num=frequency_num,
                 max_radius=max_radius,
                 min_radius=min_radius,

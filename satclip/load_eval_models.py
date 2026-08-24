@@ -8,7 +8,8 @@ import gtloc
 
 DEFAULT_POSIX_MIN_TIME = 1609487709.024  # Jan 1, 2021
 DEFAULT_POSIX_MAX_TIME = 1767609639.024  # Dec 31, 2025
-DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-1M-100k-satclip_loss-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/checkpoints/last.ckpt"
+#DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-1M-100k-satclip_loss-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/checkpoints/last.ckpt"
+DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M-lineartime/satclip-s2-satcliploss-1M-lineartime/checkpoints/best.ckpt"
 DEFAULT_TS_DOY_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M/satclip-s2-satcliploss-1M/checkpoints/last-v1.ckpt"
 DEFAULT_GTLOC_CKPT_PATH = "/home/leca5365/Documents/gtloc/ckpts/gtloc.pt"
 
