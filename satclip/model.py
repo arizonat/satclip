@@ -31,6 +31,17 @@ def pairwise_haversine_dist(coords):
     d = EARTH_RADIUS * theta
     return d
 
+def pairwise_toroidal_distance(normalized_month_hour_coords):
+    # assumes times are in normalized month-hour timestamps
+    theta = normalized_month_hour_coords[:,0]
+    phi = normalized_month_hour_coords[:,1]
+
+    dtheta = theta.unsqueeze(0) - theta.unsqueeze(1)
+    dphi = phi.unsqueeze(0) - phi.unsqueeze(1)
+
+    dt = torch.sqrt(torch.square(torch.min(dtheta, 1.0 - dtheta)) + torch.square(torch.min(dphi, 1.0 - dphi)))
+    return torch.clamp(dt, 0.0, 1.0)
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -478,9 +489,17 @@ class TemporalSatCLIP(SatCLIP):
                 output_dim=embed_dim,
                 in_channels=in_channels
             )
+
+        self.temporal_loss = temporal_loss
+        self.loss_type = loss_type
+
+        if self.temporal_loss == "toroidal":
+            t_dim = 2
+        else:
+            t_dim = 1
         
         self.posenc = get_positional_encoding(name=le_type, harmonics_calculation=harmonics_calculation, legendre_polys=legendre_polys, min_radius=min_radius, max_radius=max_radius, frequency_num=frequency_num).double()
-        self.tempenc = get_temporal_encoding(name=te_type, k=te_k).double()
+        self.tempenc = get_temporal_encoding(name=te_type, k=te_k, t_dim=t_dim).double()
         self.nnet = get_neural_network(name=pe_type, input_dim=self.posenc.embedding_dim+self.tempenc.embedding_dim, num_classes=embed_dim, dim_hidden=capacity, num_layers=num_hidden_layers).double()
         self.location = SpatioTemporalEncoder(self.posenc, 
                                         self.tempenc,
@@ -488,21 +507,8 @@ class TemporalSatCLIP(SatCLIP):
         ).double()
 
         self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
-        self.temporal_loss = temporal_loss
-        self.loss_type = loss_type
 
         self.initialize_parameters()
-
-    def toroidal_distance(self, normalized_month_hour_coords):
-        # assumes times are in normalized month-hour timestamps
-        theta = normalized_month_hour_coords[:,0].unsqueeze(0) 
-        phi = normalized_month_hour_coords[:,1].unsqueeze(0)
-
-        dtheta = theta.unsqueeze(0) - theta.unsqueeze(1)
-        dphi = phi.unsqueeze(0) - phi.unsqueeze(1)
-
-        dt = torch.sqrt(torch.square(torch.min(dtheta, 1.0 - dtheta)) +torch.square(torch.min(dphi, 1.0 - dphi)))
-        return torch.clamp(dt, 0.0, 1.0)
 
     def autocorrelations(self, coords, space_time_weight=0.5):
         # Returns W, [global_batch_size, global_batch_size]
@@ -517,7 +523,7 @@ class TemporalSatCLIP(SatCLIP):
 
         # assumes times are already normalized [0,1]
         if self.temporal_loss == "toroidal":
-            temporal_correlations = 1 - self.toroidal_distance(coords[:,2:4]) # make it a weighted correlation instead of distance
+            temporal_correlations = 1 - pairwise_toroidal_distance(coords[:,2:4]) # make it a weighted correlation instead of distance
         else:
             dt = coords[:,2].unsqueeze(0) - coords[:,2].unsqueeze(1)
             temporal_correlations = torch.clamp(torch.remainder(dt, 1.0), 0.0, 1.0)

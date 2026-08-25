@@ -123,6 +123,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        print(batch["point"].shape)
         loss = self.common_step(batch, batch_idx)
         self.log("val_loss", loss)
         return loss

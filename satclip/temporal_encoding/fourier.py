@@ -6,16 +6,17 @@ import numpy as np
 Direct encoding
 """
 class Fourier(nn.Module):
-    def __init__(self, k: int):
+    def __init__(self, k: int, t_dim: int=1):
         super(Fourier, self).__init__()
 
         self.K = int(k)
         # adding this class variable is important to determine
         # the dimension of the follow-up neural network
-        self.embedding_dim = 2 * self.K
+        self.embedding_dim = t_dim * 2 * self.K
 
     def forward(self, t):
         """
+        Fourier encoding of the temporal input t.
         Assumes t is of shape (..., 1)
         """
 
