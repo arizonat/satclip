@@ -239,11 +239,13 @@ def get_positional_encoding(name, legendre_polys=10, harmonics_calculation='anal
     else:
         raise ValueError(f"{name} not a known positional encoding.")
     
-def get_temporal_encoding(name, k=10, t_dim=2):
+def get_temporal_encoding(name, k=10, t_dim=2, sigma=1.0):
     if name == "direct":
         return TE.Direct()
     elif name == "fourier":
         return TE.Fourier(k=k, t_dim=t_dim)
+    elif name == "rff":
+        return TE.GaussianEncoding(sigma=sigma, input_size=t_dim, embedding_dim=k)
     else:
         raise ValueError(f"{name} not a known temporal encoding.")
 
@@ -303,7 +305,4 @@ class SpatioTemporalEncoder(nn.Module):
         t = coords[:, 2:]
         x_encoding = self.pos_enc(lonlat)
         t_encoding = self.temporal_enc(t)
-
-        print(f"x_encoding shape: {x_encoding.shape}, t_encoding shape: {t_encoding.shape}")
-        print("Combined shape: ", self._combine(x_encoding, t_encoding).shape)
         return self.nnet(self._combine(x_encoding, t_encoding))

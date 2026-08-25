@@ -29,13 +29,13 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         le_type="grid",
         pe_type="siren",
         te_type="fourier",
+        tpe_type="day_of_year",
         te_k=10,
         frequency_num=16,
         max_radius=260,
         min_radius=1,
         legendre_polys=16,
         harmonics_calculation="analytic",
-        sh_embedding_dims=32,
         learning_rate=1e-4,
         weight_decay=0.01,
         num_hidden_layers=2,
@@ -55,6 +55,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 le_type=le_type,
                 pe_type=pe_type,
                 te_type=te_type,
+                tpe_type=tpe_type,
                 te_k=te_k,
                 temporal_loss=temporal_loss,
                 frequency_num=frequency_num,
@@ -62,7 +63,6 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 min_radius=min_radius,
                 legendre_polys=legendre_polys,
                 harmonics_calculation=harmonics_calculation,
-                sh_embedding_dims=sh_embedding_dims,
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
                 loss_type=loss_type,
@@ -83,7 +83,6 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 min_radius=min_radius,
                 legendre_polys=legendre_polys,
                 harmonics_calculation=harmonics_calculation,
-                sh_embedding_dims=sh_embedding_dims,
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
             )
@@ -173,6 +172,8 @@ def cli_main(default_config_filename="./configs/default.yaml"):
     with open(default_config_filename, "r") as f:
         config = yaml.safe_load(f)
     is_temporal = config["model"]["is_temporal"]
+
+    assert config["model"]["tpe_type"] == config["data"]["temporal_positional_encoding"], f"tpe_type {config['model']['tpe_type']} and temporal_positional_encoding {config['data']['temporal_positional_encoding']} must match"
 
     if is_temporal:
         print("Using temporal datamodule")

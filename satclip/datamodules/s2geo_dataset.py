@@ -248,7 +248,7 @@ class S2GeoTemporal(S2Geo):
         root: str,
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
-        temporal_encoding: Optional[str] = "normalized_day_of_year"
+        temporal_positional_encoding: Optional[str] = "normalized_day_of_year"
     ) -> None:
         """Initialize a new S2-temporal dataset instance.
         Args:
@@ -260,7 +260,7 @@ class S2GeoTemporal(S2Geo):
         self.root = root
         self.transform = transform
         self.mode = mode
-        self.temporal_encoding = temporal_encoding
+        self.temporal_positional_encoding = temporal_positional_encoding
 
         if not self._check_integrity():
             raise RuntimeError("Dataset not found or corrupted.")
@@ -272,7 +272,7 @@ class S2GeoTemporal(S2Geo):
         self.points = []
 
         n_skipped_files = 0
-        print("Parsing with temporal encoding:", self.temporal_encoding)
+        print("Parsing with temporal positional encoding:", self.temporal_positional_encoding)
         for i in range(df.shape[0]):
             filename = os.path.join(self.root, "images", df.iloc[i]["fn"])
 
@@ -293,7 +293,7 @@ class S2GeoTemporal(S2Geo):
             self.points.append(pt)
 
         # Iterate through points and correct time values for normalized_posix_timestamp if necessary
-        if self.temporal_encoding == "normalized_posix_timestamp":
+        if self.temporal_positional_encoding == "normalized_posix_timestamp":
             # Get min and max timestamps
             timestamps = [p[2] for p in self.points]
             min_ts = min(timestamps)
@@ -303,46 +303,72 @@ class S2GeoTemporal(S2Geo):
             # Normalize timestamps to [0,1]
             self.points = [(p[0], p[1], (p[2]-min_ts)/(max_ts-min_ts)) for p in self.points]
 
+        if self.temporal_positional_encoding == "toy_norm_year":
+            # Get min and max years
+            years = [p[3] for p in self.points]
+            min_year = min(years)
+            max_year = max(years)
+            print(f"Normalizing years from [{min_year}, {max_year}] to [0,1]")
+
+            # Normalize years to [0,1]
+            self.points = [(p[0], p[1], p[2], (p[3]-min_year)/(max_year-min_year)) for p in self.points]
+
         print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
             f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
-        
+
+    def _time_of_year(self, dt: datetime.datetime) -> float:
+        """Compute the time of year as a float in [0,1].
+        Args:
+            dt: datetime object
+        Returns:
+            time of year as float in [0,1]
+        """
+        year_start = datetime.datetime(dt.year, 1, 1, tzinfo=dt.tzinfo).timestamp()
+        seconds_in_year = 365 * 24 * 60 * 60 if not calendar.isleap(dt.year) else 366 * 24 * 60 * 60
+        return (dt.timestamp() - year_start) / seconds_in_year
+    
     def parse_time(self, time_str: str,
-                    temporal_encoding: str="normalized_day_of_year") -> float:
+                    temporal_positional_encoding: str="normalized_day_of_year") -> float:
         """Parse a datetime string to POSIX timestamp.
         Args:
             time_str: datetime string in ISO 8601 format
         Returns:
             time encoding as float
         """
-        dt = datetime.datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+        # dt = datetime.datetime.strptime(time_str, '%Y-%m-%dT%H:%M:%S.%f+00:00')
+        dt = datetime.datetime.fromisoformat(time_str)
 
-        if temporal_encoding == "sin_norm_day_of_year":
+        if temporal_positional_encoding == "sin_norm_day_of_year":
             day_of_year = float(dt.timetuple().tm_yday-1)
             # Normalized day of year [-1,1]
             return np.sin(2 * np.pi * day_of_year / 364.0)
         
-        elif temporal_encoding == "normalized_day_of_year":
+        elif temporal_positional_encoding == "normalized_day_of_year":
             # Normalized day of year [0,1]
             return float(dt.timetuple().tm_yday-1) / 364.0
         
-        elif temporal_encoding == "day_of_year":
+        elif temporal_positional_encoding == "day_of_year":
             # 0-indexed day of year, note: leap years not considered
             return float(dt.timetuple().tm_yday-1)
         
-        elif temporal_encoding == "posix_timestamp":
+        elif temporal_positional_encoding == "posix_timestamp":
             # POSIX timestamp from UTC, as float (seconds since epoch)
             return dt.timestamp()
 
-        elif temporal_encoding == "normalized_posix_timestamp":
+        elif temporal_positional_encoding == "normalized_posix_timestamp":
             # POSIX timestamp from UTC, as float (seconds since epoch), normalization handled outside this function
             return dt.timestamp()
 
-        elif temporal_encoding == "toroidal":
+        elif temporal_positional_encoding == "toroidal":
             t_tuple = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
             doms = calendar.monthrange(dt.year, dt.month)
             norm_month = (1/12) * ((t_tuple[1]-1) + (t_tuple[2]-1)/doms[1])
             norm_hour = (1/24) * t_tuple[3]
             return (norm_month, norm_hour)
-        
+
+        elif temporal_positional_encoding == "toy_norm_year":
+            # ToY (Time of Year) year encoding, normalized to [0,1]
+            # Returns a tuple of (normalized_time_of_year, year), normalization handled outside this function
+            return (self._time_of_year(dt), dt.year)
         else:
             return dt.timestamp()

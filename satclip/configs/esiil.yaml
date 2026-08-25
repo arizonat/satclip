@@ -25,7 +25,8 @@ trainer:
 model:
   is_temporal: True
   loss_type: 'satclip_loss' # options: 'satclip_loss', 'soft_loss'
-  te_type: 'fourier'
+  te_type: 'fourier' # options: 'direct', 'fourier', 'rff'
+  tpe_type: 'toy_norm_year' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal', 'toy_norm_year'
   temporal_loss: 'euclidean' # options: 'euclidean', 'toroidal' (ignored if not using soft_loss)
   te_k: 10
   embed_dim: 256
@@ -45,7 +46,7 @@ model:
   capacity: 256
 data:
   data_dir: /mnt/DATA/leca5365/satclip-s2-1M-2.0
-  temporal_encoding: 'normalized_posix_timestamp' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
+  temporal_positional_encoding: 'toy_norm_year' # options: 'day_of_year', 'toy_norm_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
   batch_size: 4096
   num_workers: 8
   val_random_split_fraction: 0.1

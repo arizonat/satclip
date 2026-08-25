@@ -13,6 +13,7 @@ trainer:
         project: 'temporal_satclip-s2'
         name: 'temporal_satclip-s2'
         version: 'temporal_satclip-s2'
+        
   callbacks:
     - class_path: lightning.pytorch.callbacks.ModelCheckpoint
       init_args:
@@ -26,8 +27,9 @@ model:
   is_temporal: True
   loss_type: 'satclip_loss' # options: 'satclip_loss', 'soft_loss'
   temporal_loss: 'euclidean' # options: 'euclidean', 'toroidal'
-  te_type: 'fourier'
-  te_k: 10
+  te_type: 'fourier' # options: 'direct', 'fourier', 'rff'/'gaussian'
+  te_k: 40
+  te_sigma: 2**4 # default geoclip
   embed_dim: 256
   image_resolution: 224
   vision_layers: "moco_vit16"
@@ -38,14 +40,13 @@ model:
   frequency_num: 16
   max_radius: 0.01
   min_radius: 0.00001
-  legendre_polys: 32
-  sh_embedding_dims: 32
+  legendre_polys: 40
   learning_rate: 0.0001
   num_hidden_layers: 2
   capacity: 256
 data:
   data_dir: s2-1M
-  temporal_encoding: 'day_of_year' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
+  temporal_positional_encoding: 'day_of_year' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
   batch_size: 4096
   num_workers: 16
   val_random_split_fraction: 0.1
