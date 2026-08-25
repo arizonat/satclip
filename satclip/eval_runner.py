@@ -13,7 +13,8 @@ from load_eval_models import *
 from utils import *
 
 # List of seeds to run
-SEEDS = [42, 123, 456, 789]
+# SEEDS = [42, 123, 456, 789]
+SEEDS = [42]
 
 # List of models to run
 # MODELS = ["tsatclip-linear", "gtloc", "climplicit"]
@@ -33,7 +34,9 @@ DATASETS = ["ghcnd"]
 CV_TYPES = ["uar", "spatial", "temporal"]
 
 # List of metrics to run
-METRICS = ["linear-probe"]
+METRICS = ["ridge-cv"]
+
+RIDGE_ALPHAS = tuple(float(10.0**e) for e in np.arange(-4.0, 6.5, 0.5))
 
 class MLP(nn.Module):
     def __init__(self, input_dim, dim_hidden, num_layers, out_dims):
@@ -60,7 +63,34 @@ def load_ghcnd_dataset(dataset_path="../data/ghcn_2021_2026_high_temp_benchmark.
     data = torch.tensor(df.values, dtype=torch.float32, device="cpu")
     return data
 
-def run_linear_probe_evaluation(model, train_data, test_data, device="cuda", results_dir="results"):
+def run_ridge_cv_probe_eval(model, train_data, test_data, device="cuda", results_dir="results"):
+    from sklearn.linear_model import RidgeCV
+
+    # Get embeddings
+    model = model.to(device)
+    model.eval()
+    train_embeddings = model(train_data[:, :3].to(device).detach().clone().double())
+    test_embeddings = model(test_data[:, :3].to(device).detach().clone().double())
+
+    X_train = train_embeddings.detach().cpu().numpy()
+    y_train = train_data[:, 3].detach().cpu().numpy()
+
+    X_test = test_embeddings.detach().cpu().numpy()
+    y_test = test_data[:, 3].detach().cpu().numpy()
+
+    ridge_model = RidgeCV(alphas=RIDGE_ALPHAS, cv=None)
+    ridge_model.fit(X_train, y_train)
+
+    y_pred = ridge_model.predict(X_test)
+
+    #Get RMSE
+    rmse = torch.sqrt(F.mse_loss(torch.tensor(y_pred), torch.tensor(y_test))).item()
+
+    results = {}
+    results["test_rmse"] = rmse
+    return results
+
+def run_linear_probe_eval(model, train_data, test_data, device="cuda", results_dir="results"):
     from sklearn.linear_model import LinearRegression, Ridge
 
     # Get embeddings
@@ -87,7 +117,7 @@ def run_linear_probe_evaluation(model, train_data, test_data, device="cuda", res
     results["test_rmse"] = rmse
     return results
 
-def run_mlp_finetune_evaluation(model, train_set, test_set, device="cuda", results_dir="results"):
+def run_mlp_finetune_eval(model, train_set, test_set, device="cuda", results_dir="results"):
     """
     Dataset of the form (lat, lon, posix_time, value) where value is the target variable to predict.
     """
@@ -236,9 +266,11 @@ def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cu
 
     # Run the eval
     if metric == "linear-probe":
-        evals = run_linear_probe_evaluation(model, train_data, test_data, device=device, results_dir=results_dir)
+        evals = run_linear_probe_eval(model, train_data, test_data, device=device, results_dir=results_dir)
     elif metric == "mlp-finetune":
-        evals = run_mlp_finetune_evaluation(model, train_data, test_data, device=device, results_dir=results_dir)
+        evals = run_mlp_finetune_eval(model, train_data, test_data, device=device, results_dir=results_dir)
+    elif metric == "ridge-cv":
+        evals = run_ridge_cv_probe_eval(model, train_data, test_data, device=device, results_dir=results_dir)
 
     # Save intermediate plots in results_dir
     results["eval"] = evals
