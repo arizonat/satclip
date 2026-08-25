@@ -231,11 +231,11 @@ def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cu
     model = model_loader()
     dataset = dataset_loader()
 
-    print(f"Dataset shape: {dataset.shape}")
+    orig_dataset_shape = dataset.shape
 
     # Subsample the dataset for faster evaluation (optional)
     dataset = dataset[torch.randperm(dataset.shape[0])[:500_000]]  # Subsample to 10,000 points
-    print(f"Subsampled dataset shape: {dataset.shape}")
+    print(f"Subsampled dataset shape from {orig_dataset_shape} to {dataset.shape}")
 
     # Split the dataset into train and test sets based on cv_type
     if cv_type == "uar":
