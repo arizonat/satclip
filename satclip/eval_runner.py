@@ -17,7 +17,7 @@ SEEDS = [42, 123, 456, 789]
 
 # List of models to run
 # MODELS = ["tsatclip-linear", "gtloc", "climplicit"]
-MODELS = ["tsatclip/linear", "gtloc", "tsatclip/doy", "sin-cos", "simplest"]
+MODELS = [ "tsatclip/doy", "tsatclip/linear", "gtloc", "climplicit", "sin-cos", "simplest"]
 
 # In Lat/Lon Degrees
 SPATIAL_DELTAS = [2, 4, 8, 16, 32]
@@ -168,9 +168,9 @@ _REGISTERED_MODELS = {
     "tsatclip/linear": load_temporal_satclip_linear_model,
     "tsatclip/doy": load_temporal_satclip_doy_model,
     "gtloc": load_gtloc_model,
+    "climplicit": lambda device="cuda": ClimplicitWrapper().to(device),
     "sin-cos": lambda device="cuda": SinCosWrapper().to(device),
     "simplest": lambda device="cuda": SimplestModelWrapper().to(device),
-    "dumb": lambda device="cuda": DumbModelWrapper().to(device),
 }
 
 def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cuda", results_dir="results"):
@@ -249,11 +249,11 @@ def main():
     Main function to run evaluations across all combinations of models, datasets, metrics, and seeds.
     """
 
-    cv_types = ["uar","spatial","temporal"]
-    seeds = [42, 156223, 4456, 7809, 100123]
-    datasets = ["ghcnd"]
-    models = ["tsatclip/doy", "tsatclip/linear", "gtloc", "sin-cos", "simplest"]
-    metrics = ["linear-probe"]
+    cv_types = CV_TYPES
+    seeds = SEEDS
+    datasets = DATASETS
+    models = MODELS
+    metrics = METRICS
 
     results = {}
 

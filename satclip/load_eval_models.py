@@ -6,6 +6,8 @@ import numpy as np
 
 import gtloc
 
+from rshf.climplicit import Climplicit
+
 DEFAULT_POSIX_MIN_TIME = 1609487709.024  # Jan 1, 2021
 DEFAULT_POSIX_MAX_TIME = 1767609639.024  # Dec 31, 2025
 #DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-1M-100k-satclip_loss-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/checkpoints/last.ckpt"
@@ -13,6 +15,24 @@ DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_
 DEFAULT_TS_DOY_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M/satclip-s2-satcliploss-1M/checkpoints/last-v1.ckpt"
 DEFAULT_GTLOC_CKPT_PATH = "/home/leca5365/Documents/gtloc/ckpts/gtloc.pt"
 
+class ClimplicitWrapper(nn.Module):
+    def __init__(self, ckpt_path: str = "Jobedo/climplicit", device: str = "cuda"):
+        super().__init__()
+        self.model = Climplicit.from_pretrained(ckpt_path, config={"return_chelsa": False}).to(device)
+        self.embedding_dim = 256
+
+    def forward(self, x):
+        # Wrapper expects (N, [lat, lon, time]) and returns embeddings
+        # The Climplicit model expects (N, [lon, lat], months) and returns embeddings
+
+        x = x.clone()
+        posix_time = x[..., 2]
+        months = (((posix_time % 31556926) / 2629800).long() + 1).int()
+
+        with torch.no_grad():
+            x[..., :2] = x[..., :2][:, [1, 0]] # Change to (lon, lat)
+            embeddings = self.model(x[..., :2], months).detach()
+        return embeddings
 
 class TemporalSatCLIPWrapper(nn.Module):
     def __init__(self, model_name: str = "tsatclip/linear", ckpt_path: str = None, device: str = "cuda", posix_min_time: int = None, posix_max_time: int = None, embedding_dim: int = 256):
