@@ -360,10 +360,11 @@ class S2GeoTemporal(S2Geo):
             return dt.timestamp()
 
         elif temporal_positional_encoding == "toroidal":
+            # Based on GTLoc paper, we encode time as a 2D toroidal representation (month, day) normalized to [0,1]
             t_tuple = (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
             doms = calendar.monthrange(dt.year, dt.month)
             norm_month = (1/12) * ((t_tuple[1]-1) + (t_tuple[2]-1)/doms[1])
-            norm_hour = (1/24) * t_tuple[3]
+            norm_hour = (1/24) * (t_tuple[3] + (t_tuple[4]/60) + (t_tuple[5]/3600))
             return (norm_month, norm_hour)
 
         elif temporal_positional_encoding == "toy_norm_year":

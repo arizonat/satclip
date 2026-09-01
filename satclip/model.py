@@ -187,7 +187,6 @@ class ModifiedResNet(nn.Module):
 
         return x
 
-
 class LayerNorm(nn.LayerNorm):
     """Subclass torch's LayerNorm to handle fp16."""
 
@@ -289,9 +288,7 @@ class SatCLIP(nn.Module):
                  max_radius: int,  
                  min_radius: int,
                  harmonics_calculation: str,
-                 legendre_polys: int=10, 
-                 sh_embedding_dims: int=16, 
-                 ffn: bool=True,
+                 legendre_polys: int=10,
                  num_hidden_layers: int=2,
                  capacity: int=256,
                  *args,
@@ -390,7 +387,6 @@ class SatCLIP(nn.Module):
         return self.location(coords.double())
 
     def forward(self, image, coords):
-
         image_features = self.encode_image(image)     
         location_features = self.encode_location(coords).float()
         
@@ -420,17 +416,17 @@ class TemporalSatCLIP(SatCLIP):
                 le_type: str, # location encoding type
                 pe_type: str, # positional encoding type
                 te_type: str, # temporal encoding type
+                tpe_type: str, # temporal positional encoding type
                 temporal_loss: str, # temporal loss type
                 frequency_num: int, 
                 max_radius: int,  
                 min_radius: int,
                 harmonics_calculation: str,
-                legendre_polys: int=10, 
-                sh_embedding_dims: int=16, 
-                ffn: bool=True,
+                legendre_polys: int=10,
                 num_hidden_layers: int=2,
                 capacity: int=256,
                 # temporal
+                te_sigma: float=1.0, # only for rffs
                 te_k: int=10,
                 *args,
                 **kwargs
@@ -491,15 +487,19 @@ class TemporalSatCLIP(SatCLIP):
             )
 
         self.temporal_loss = temporal_loss
+        self.tpe_type = tpe_type
         self.loss_type = loss_type
 
-        if self.temporal_loss == "toroidal":
+        # if self.temporal_loss == "toroidal":
+        #     assert self.tpe_type == "toroidal", f"temporal loss type {self.temporal_loss} must correspond with temporal positional encoding type {self.tpe_type}"
+
+        if self.tpe_type == "toroidal" or self.tpe_type == "toy_norm_year":
             t_dim = 2
         else:
             t_dim = 1
         
         self.posenc = get_positional_encoding(name=le_type, harmonics_calculation=harmonics_calculation, legendre_polys=legendre_polys, min_radius=min_radius, max_radius=max_radius, frequency_num=frequency_num).double()
-        self.tempenc = get_temporal_encoding(name=te_type, k=te_k, t_dim=t_dim).double()
+        self.tempenc = get_temporal_encoding(name=te_type, k=te_k, t_dim=t_dim, sigma=te_sigma).double()
         self.nnet = get_neural_network(name=pe_type, input_dim=self.posenc.embedding_dim+self.tempenc.embedding_dim, num_classes=embed_dim, dim_hidden=capacity, num_layers=num_hidden_layers).double()
         self.location = SpatioTemporalEncoder(self.posenc, 
                                         self.tempenc,

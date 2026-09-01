@@ -1,3 +1,4 @@
+import calendar
 import torch
 from main import SatCLIPLightningModule
 from satclip import TemporalSatCLIP
@@ -13,6 +14,7 @@ DEFAULT_POSIX_MAX_TIME = 1767609639.024  # Dec 31, 2025
 #DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-1M-100k-satclip_loss-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/satclip-s2-satcliploss-1M-normalized_posix_timestamp/checkpoints/last.ckpt"
 DEFAULT_TS_LINEAR_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M-lineartime/satclip-s2-satcliploss-1M-lineartime/checkpoints/best.ckpt"
 DEFAULT_TS_DOY_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M/satclip-s2-satcliploss-1M/checkpoints/last-v1.ckpt"
+DEFAULT_TS_TOROIDAL_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M-toroidal/satclip-s2-satcliploss-1M-toroidal/checkpoints/last.ckpt"
 DEFAULT_GTLOC_CKPT_PATH = "/home/leca5365/Documents/gtloc/ckpts/gtloc.pt"
 
 class ClimplicitWrapper(nn.Module):
@@ -38,7 +40,11 @@ class TemporalSatCLIPWrapper(nn.Module):
     def __init__(self, model_name: str = "tsatclip/linear", ckpt_path: str = None, device: str = "cuda", posix_min_time: int = None, posix_max_time: int = None, embedding_dim: int = 256):
         # Options for model_name: "tsatclip/linear", "tsatclip/doy"
         super().__init__()
-        if ckpt_path is not None:
+        if model_name == "tsatclip/toroidal":
+            # Older checkpoints did not properly have tpe_type set to toroidal, so we need to load the model and then set the tpe_type to toroidal
+            print(f"Loading TemporalSatCLIP model from checkpoint {ckpt_path} with tpe_type set to toroidal")
+            self.lightning_model = SatCLIPLightningModule.load_from_checkpoint(ckpt_path, tpe_type="toroidal")
+        elif ckpt_path is not None:
             self.lightning_model = SatCLIPLightningModule.load_from_checkpoint(ckpt_path)
         else:
             self.model = TemporalSatCLIP(model_name=model_name)
@@ -69,6 +75,23 @@ class TemporalSatCLIPWrapper(nn.Module):
             # Convert posix time to linear time
             linear_time = (posix_time - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)
             x[..., 2] = linear_time.float()
+
+        elif self.model_name == "tsatclip/toroidal":
+            # Convert posix time to toroidal representation
+            dates = posix_time.cpu().numpy().astype('datetime64[M]')
+            years = posix_time.cpu().numpy().astype('datetime64[Y]').astype(int) + 1970
+            months = dates.astype(int) % 12 + 1
+            days = posix_time.cpu().numpy().astype('datetime64[D]') - dates + 1
+            doms = np.array([calendar.monthrange(year, month) for year, month in zip(years, months)])
+            norm_month = torch.tensor(((months - 1) + ((days - 1) / doms[:, 1])).astype(float) / 12.0).to(x.device)
+
+
+            hours = (posix_time % 86400) / 3600
+            minutes = (posix_time % 3600) / 60
+            seconds = posix_time % 60
+            norm_hours = (hours + (minutes/60) + (seconds/3600)) / 24.0
+
+            x = torch.cat([x[...,:-1], norm_month.unsqueeze(-1), norm_hours.unsqueeze(-1)], dim=-1)
 
         with torch.no_grad():
             # x = x.permute(1, 0, 2)  # Change to (lon, lat, time)
@@ -143,6 +166,13 @@ def load_temporal_satclip_doy_model(model_name: str = "tsatclip/doy",
                                    device: str = "cuda"):
     return TemporalSatCLIPWrapper(model_name=model_name, 
                                   ckpt_path=ckpt_path, 
+                                  device=device)
+
+def load_temporal_satclip_toroidal_model(model_name: str = "tsatclip/toroidal",
+                                         ckpt_path: str = DEFAULT_TS_TOROIDAL_CKPT_PATH,
+                                         device: str = "cuda"):
+    return TemporalSatCLIPWrapper(model_name=model_name,
+                                  ckpt_path=ckpt_path,
                                   device=device)
 
 class SimplestModelWrapper(nn.Module):

@@ -9,8 +9,9 @@ import pandas as pd
 from load_eval_models import *
 import torch.nn.functional as F
 from load_eval_models import *
+from tqdm import tqdm
 
-from utils import *
+from satclip.splits import *
 
 # List of seeds to run
 # SEEDS = [42, 123, 456, 789]
@@ -18,7 +19,8 @@ SEEDS = [42]
 
 # List of models to run
 # MODELS = ["tsatclip-linear", "gtloc", "climplicit"]
-MODELS = [ "tsatclip/doy", "tsatclip/linear", "gtloc", "climplicit", "sin-cos", "simplest"]
+MODELS = [ "tsatclip/doy", "tsatclip/linear", "tsatclip/toroidal", "gtloc", "climplicit", "sin-cos", "simplest"]
+# MODELS = ["tsatclip/toroidal"]
 
 # In Lat/Lon Degrees
 SPATIAL_DELTAS = [2, 4, 8, 16, 32]
@@ -194,9 +196,10 @@ _REGISTERED_DATASET = {
     "ghcnd": load_ghcnd_dataset,
 }
 
-_REGISTERED_MODELS = {
+_REGISTERED_MODELS = { 
     "tsatclip/linear": load_temporal_satclip_linear_model,
     "tsatclip/doy": load_temporal_satclip_doy_model,
+    "tsatclip/toroidal": load_temporal_satclip_toroidal_model,
     "gtloc": load_gtloc_model,
     "climplicit": lambda device="cuda": ClimplicitWrapper().to(device),
     "sin-cos": lambda device="cuda": SinCosWrapper().to(device),
@@ -207,6 +210,8 @@ def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cu
     """
     Runs a single evaluation on a given dataset and model.
     """
+    print(f"Running eval: model {model} | dataset {dataset} | cv_type {cv_type} | delta {delta} | metric {metric}.")
+
     # Set the random seed for reproducibility
     import random
     import numpy as np
@@ -224,7 +229,6 @@ def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cu
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
 
-    print(f"Running eval: model {model} | dataset {dataset} | cv_type {cv_type} | delta {delta} | metric {metric}.")
     model_loader = _REGISTERED_MODELS[model]
     dataset_loader = _REGISTERED_DATASET[dataset]
 
@@ -235,7 +239,7 @@ def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cu
 
     # Subsample the dataset for faster evaluation (optional)
     dataset = dataset[torch.randperm(dataset.shape[0])[:500_000]]  # Subsample to 10,000 points
-    print(f"Subsampled dataset shape from {orig_dataset_shape} to {dataset.shape}")
+    # print(f"Subsampled dataset shape from {orig_dataset_shape} to {dataset.shape}")
 
     # Split the dataset into train and test sets based on cv_type
     if cv_type == "uar":
@@ -291,9 +295,9 @@ def main():
 
     results_df = pd.DataFrame(columns=["seed", "model", "dataset", "cv_type", "metric", "test_rmse", "delta"])
 
-    for seed in seeds:
-        for model in models:
-            for dataset in datasets:
+    for seed in tqdm(seeds, desc="Seeds"):
+        for model in tqdm(models, desc="Models", leave=False):
+            for dataset in tqdm(datasets, desc="Datasets", leave=False):
                 for cv_type in cv_types:
                     for metric in metrics:
                         if cv_type == "spatial":
