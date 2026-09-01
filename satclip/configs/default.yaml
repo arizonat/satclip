@@ -28,6 +28,7 @@ model:
   loss_type: 'satclip_loss' # options: 'satclip_loss', 'soft_loss'
   temporal_loss: 'euclidean' # options: 'euclidean', 'toroidal'
   te_type: 'fourier' # options: 'direct', 'fourier', 'rff'/'gaussian'
+  tpe_type: 'day_of_year'
   te_k: 40
   te_sigma: 2**4 # default geoclip
   embed_dim: 256
@@ -45,7 +46,8 @@ model:
   num_hidden_layers: 2
   capacity: 256
 data:
-  data_dir: s2-1M
+  data_dir: /mnt/DATA/leca5365/satclip-s2-1M-2.0
+  index_fn: index-balanced-100k.csv
   temporal_positional_encoding: 'day_of_year' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
   batch_size: 4096
   num_workers: 16

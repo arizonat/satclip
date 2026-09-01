@@ -29,6 +29,7 @@ class S2GeoDataModule(pl.LightningDataModule):
         val_random_split_fraction: float = 0.1,
         transform: str = 'pretrained',
         mode: str = "both",
+        index_fn: str = "index.csv"
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -43,6 +44,7 @@ class S2GeoDataModule(pl.LightningDataModule):
             
         self.val_random_split_fraction = val_random_split_fraction
         self.mode = mode
+        self.index_fn = index_fn
         self.save_hyperparameters()
 
     def prepare_data(self) -> None:
@@ -52,7 +54,10 @@ class S2GeoDataModule(pl.LightningDataModule):
             """)
 
     def setup(self, stage="fit"):
-        dataset = S2Geo(root=self.data_dir, transform=self.train_transform, mode=self.mode)
+        dataset = S2Geo(root=self.data_dir, 
+                        index_fn=self.index_fn, 
+                        transform=self.train_transform, 
+                        mode=self.mode)
 
         N_val = int(len(dataset) * self.val_random_split_fraction)
         N_train = len(dataset) - N_val
@@ -88,7 +93,8 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
         val_random_split_fraction: float = 0.1,
         transform: str = 'pretrained',
         mode: str = "both",
-        temporal_encoding: Optional[str] = "normalized_day_of_year"
+        temporal_positional_encoding: Optional[str] = "normalized_day_of_year",
+        index_fn: str = "index.csv"
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -103,41 +109,40 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
             
         self.val_random_split_fraction = val_random_split_fraction
         self.mode = mode
-        self.temporal_encoding = temporal_encoding
+        self.temporal_positional_encoding = temporal_positional_encoding
+        self.index_fn = index_fn
         self.save_hyperparameters()
 
     def setup(self, stage="fit"):
-        dataset = S2GeoTemporal(root=self.data_dir, transform=self.train_transform, mode=self.mode, temporal_encoding=self.temporal_encoding)
+        dataset = S2GeoTemporal(root=self.data_dir, 
+                                index_fn=self.index_fn,
+                                transform=self.train_transform, 
+                                mode=self.mode, 
+                                temporal_positional_encoding=self.temporal_positional_encoding)
 
         N_val = int(len(dataset) * self.val_random_split_fraction)
         N_train = len(dataset) - N_val
         self.train_dataset, self.val_dataset = torch.utils.data.random_split(dataset, [N_train, N_val])
 
 class S2Geo(NonGeoDataset):
-    """S2-100K dataset.
-
-    This dataset contains 100,000 256x256 patches of 12 band Sentinel imagery sampled randomly
-    from Sentinel 2 scenes on the Microsoft Planetary Computer that have <20% cloud cover,
-    intersect land, and were captured between 2021-01-01 and 2023-05-17 (there are 2,359,972
-    such scenes).
+    """S2 dataset.
     """
 
     validation_filenames = [
         "index.csv",
         "images/",
-        # "images/patch_0.tif",
-        # "images/patch_99999.tif",
     ]
 
     def __init__(
         self,
         root: str,
+        index_fn: str = "index.csv",
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
     ) -> None:
-        """Initialize a new S2-100K dataset instance.
+        """Initialize a new dataset instance.
         Args:
-            root: root directory of S2-100K pre-sampled dataset
+            root: root directory of pre-sampled dataset
             transform: torch transform to apply to a sample
             mode: which data to return (options are "both" or "points"), useful for embedding locations without loading images 
         """
@@ -145,12 +150,11 @@ class S2Geo(NonGeoDataset):
         self.root = root
         self.transform = transform
         self.mode = mode
+        self.index_fn = index_fn
         if not self._check_integrity():
             raise RuntimeError("Dataset not found or corrupted.")
 
-        index_fn = "index.csv"
-
-        df = pd.read_csv(os.path.join(self.root, index_fn))
+        df = pd.read_csv(os.path.join(self.root, self.index_fn))
         self.filenames = []
         self.points = []
 
@@ -246,6 +250,7 @@ class S2GeoTemporal(S2Geo):
     def __init__(
         self,
         root: str,
+        index_fn: str = "index.csv",
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
         temporal_positional_encoding: Optional[str] = "normalized_day_of_year"
@@ -261,13 +266,12 @@ class S2GeoTemporal(S2Geo):
         self.transform = transform
         self.mode = mode
         self.temporal_positional_encoding = temporal_positional_encoding
+        self.index_fn = index_fn
 
         if not self._check_integrity():
             raise RuntimeError("Dataset not found or corrupted.")
 
-        index_fn = "index.csv"
-
-        df = pd.read_csv(os.path.join(self.root, index_fn))
+        df = pd.read_csv(os.path.join(self.root, self.index_fn))
         self.filenames = []
         self.points = []
 
@@ -283,7 +287,7 @@ class S2GeoTemporal(S2Geo):
             self.filenames.append(filename)
 
             # Parse S2 timestamp to POSIX time, note that S2 timestamps are in UTC and up to the second anyway
-            t = self.parse_time(df.iloc[i]["ts"], temporal_encoding = self.temporal_encoding)
+            t = self.parse_time(df.iloc[i]["ts"], temporal_positional_encoding = self.temporal_positional_encoding)
 
             if type(t) == tuple:
                 pt = (df.iloc[i]["lon"], df.iloc[i]["lat"]) + t
