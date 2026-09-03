@@ -296,7 +296,8 @@ class S2GeoTemporal(S2Geo):
 
             self.points.append(pt)
 
-        # Iterate through points and correct time values for normalized_posix_timestamp if necessary
+        # Normalization of temporal features to [0,1] is done here for encodings that require it
+        # TODO: This normalization should be done in a more elegant way, but for now this works
         if self.temporal_positional_encoding == "normalized_posix_timestamp":
             # Get min and max timestamps
             timestamps = [p[2] for p in self.points]
@@ -307,7 +308,7 @@ class S2GeoTemporal(S2Geo):
             # Normalize timestamps to [0,1]
             self.points = [(p[0], p[1], (p[2]-min_ts)/(max_ts-min_ts)) for p in self.points]
 
-        if self.temporal_positional_encoding == "toy_norm_year":
+        elif self.temporal_positional_encoding == "norm_doy_norm_year":
             # Get min and max years
             years = [p[3] for p in self.points]
             min_year = min(years)
@@ -316,6 +317,26 @@ class S2GeoTemporal(S2Geo):
 
             # Normalize years to [0,1]
             self.points = [(p[0], p[1], p[2], (p[3]-min_year)/(max_year-min_year)) for p in self.points]
+
+        elif self.temporal_positional_encoding == "toy_norm_year":
+            # Get min and max years
+            years = [p[3] for p in self.points]
+            min_year = min(years)
+            max_year = max(years)
+            print(f"Normalizing years from [{min_year}, {max_year}] to [0,1]")
+
+            # Normalize years to [0,1]
+            self.points = [(p[0], p[1], p[2], (p[3]-min_year)/(max_year-min_year)) for p in self.points]
+
+        elif self.temporal_positional_encoding == "norm_year":
+            # Get min and max years
+            years = [p[2] for p in self.points]
+            min_year = min(years)
+            max_year = max(years)
+            print(f"Normalizing years from [{min_year}, {max_year}] to [0,1]")
+
+            # Normalize years to [0,1]
+            self.points = [(p[0], p[1], (p[2]-min_year)/(max_year-min_year)) for p in self.points]
 
         print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
             f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
@@ -354,6 +375,9 @@ class S2GeoTemporal(S2Geo):
         elif temporal_positional_encoding == "day_of_year":
             # 0-indexed day of year, note: leap years not considered
             return float(dt.timetuple().tm_yday-1)
+
+        elif temporal_positional_encoding == "norm_doy_norm_year":
+            return (float(dt.timetuple().tm_yday-1) / 364.0, dt.year)
         
         elif temporal_positional_encoding == "posix_timestamp":
             # POSIX timestamp from UTC, as float (seconds since epoch)
@@ -371,9 +395,18 @@ class S2GeoTemporal(S2Geo):
             norm_hour = (1/24) * (t_tuple[3] + (t_tuple[4]/60) + (t_tuple[5]/3600))
             return (norm_month, norm_hour)
 
+        elif temporal_positional_encoding == "toy":
+            # ToY (Time of Year) encoding, normalized to [0,1]
+            return self._time_of_year(dt)
+
         elif temporal_positional_encoding == "toy_norm_year":
             # ToY (Time of Year) year encoding, normalized to [0,1]
             # Returns a tuple of (normalized_time_of_year, year), normalization handled outside this function
             return (self._time_of_year(dt), dt.year)
+        
+        elif temporal_positional_encoding == "norm_year":
+            # Normalize year to [0,1] outside this function, returns year as float
+            return dt.year
+        
         else:
             return dt.timestamp()

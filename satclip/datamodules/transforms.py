@@ -165,6 +165,14 @@ def get_pretrained_terrafm_s2_train_transform_temporal(resize_crop_size = 256):
 
     return transform
 
+def get_precomputed_s2_train_transform():
+    def transform(sample):
+        embedding = sample["embedding"]
+        point = sample["point"]
+        point = coordinate_jitter(point)
+        return dict(embedding=embedding, point=point)
+    return transform
+
 def coordinate_jitter(
         point,
         radius=0.01 # approximately 1 km
