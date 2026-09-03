@@ -291,6 +291,7 @@ class SatCLIP(nn.Module):
                  legendre_polys: int=10,
                  num_hidden_layers: int=2,
                  capacity: int=256,
+                 mode: str="both",
                  *args,
                  **kwargs
                  ):
@@ -387,7 +388,14 @@ class SatCLIP(nn.Module):
         return self.location(coords.double())
 
     def forward(self, image, coords):
-        image_features = self.encode_image(image)     
+
+        if self.mode == "both":
+            image_features = self.encode_image(image)
+        elif self.mode == "precomputed":
+            image_features = image
+        else:
+            raise ValueError(f"Invalid mode {self.mode}. Must be one of ['both', 'precomputed']")
+
         location_features = self.encode_location(coords).float()
         
         # normalized features
@@ -428,6 +436,7 @@ class TemporalSatCLIP(SatCLIP):
                 # temporal
                 te_sigma: float=1.0, # only for rffs
                 te_k: int=10,
+                mode: str="both",
                 *args,
                 **kwargs
                 ):
@@ -489,6 +498,7 @@ class TemporalSatCLIP(SatCLIP):
         self.temporal_loss = temporal_loss
         self.tpe_type = tpe_type
         self.loss_type = loss_type
+        self.mode = mode
 
         # if self.temporal_loss == "toroidal":
         #     assert self.tpe_type == "toroidal", f"temporal loss type {self.temporal_loss} must correspond with temporal positional encoding type {self.tpe_type}"
@@ -536,7 +546,13 @@ class TemporalSatCLIP(SatCLIP):
 
     def forward(self, image, coords):
 
-        image_features = self.encode_image(image)     
+        if self.mode == "both":
+            image_features = self.encode_image(image)
+        elif self.mode == "precomputed":
+            image_features = image
+        else:
+            raise ValueError(f"Invalid mode {self.mode}. Must be one of ['both', 'precomputed']")
+        
         location_features = self.encode_location(coords).float()
         
         # normalized features

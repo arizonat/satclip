@@ -28,7 +28,7 @@ model:
   loss_type: 'satclip_loss' # options: 'satclip_loss', 'soft_loss'
   temporal_loss: 'euclidean' # options: 'euclidean', 'toroidal'
   te_type: 'fourier' # options: 'direct', 'fourier', 'rff'/'gaussian'
-  tpe_type: 'day_of_year'
+  tpe_type: 'day_of_year' # options: 'toy_y', 'y', 'toy', 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
   te_k: 40
   te_sigma: 2**4 # default geoclip
   embed_dim: 256
@@ -45,13 +45,16 @@ model:
   learning_rate: 0.0001
   num_hidden_layers: 2
   capacity: 256
+  mode: "precomputed" # options: "both", "point", "precomputed"
 data:
   data_dir: /mnt/DATA/leca5365/satclip-s2-1M-2.0
   index_fn: index-balanced-100k.csv
+  embeddings_fn: moco_vit16_embeddings.parquet
   temporal_positional_encoding: 'day_of_year' # options: 'day_of_year', 'normalized_day_of_year', 'posix_timestamp', 'normalized_posix_timestamp', 'toroidal'
   batch_size: 4096
   num_workers: 16
   val_random_split_fraction: 0.1
   crop_size: 224
-  transform: "pretrained" # options: "pretrained", "default", "pretrained_terrafm"
+  mode: "precomputed" # options: "both", "point", "precomputed"
+  transform: "pretrained" # options: "pretrained", "default", "pretrained_terrafm", "precomputed"
 watchmodel: True

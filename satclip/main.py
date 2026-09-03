@@ -42,6 +42,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         num_hidden_layers=2,
         capacity=256,
         temporal_loss=None,
+        mode="both", # options: "both", "point", "precomputed"
     ) -> None:
         super().__init__()
 
@@ -68,6 +69,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
                 loss_type=loss_type,
+                mode=mode,
             )
             self.is_temporal = True
         else:
@@ -87,6 +89,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
                 harmonics_calculation=harmonics_calculation,
                 num_hidden_layers=num_hidden_layers,
                 capacity=capacity,
+                mode=mode,
             )
             self.is_temporal = False
 
@@ -103,17 +106,28 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.save_hyperparameters()
+        self.mode = mode
 
     def common_step(self, batch, batch_idx):
-        images = batch["image"]
         t_points = batch["point"].float()
-        
-        if self.loss_type == "soft_loss":
-            logits_per_image, logits_per_coord, autocorrelations_per_image = self.model(images, t_points)
-            loss = self.loss_fun(logits_per_image, logits_per_coord, autocorrelations_per_image)
+
+        if self.mode == "precomputed":
+            embeddings = batch["embedding"].float()
+            if self.loss_type == "soft_loss":
+                logits_per_embedding, logits_per_coord, autocorrelations_per_embedding = self.model(embeddings, t_points)
+                loss = self.loss_fun(logits_per_embedding, logits_per_coord, autocorrelations_per_embedding)
+            else:
+                logits_per_embedding, logits_per_coord = self.model(embeddings, t_points)
+                loss = self.loss_fun(logits_per_embedding, logits_per_coord)
         else:
-            logits_per_image, logits_per_coord = self.model(images, t_points)
-            loss = self.loss_fun(logits_per_image, logits_per_coord)
+            images = batch["image"]
+            
+            if self.loss_type == "soft_loss":
+                logits_per_image, logits_per_coord, autocorrelations_per_image = self.model(images, t_points)
+                loss = self.loss_fun(logits_per_image, logits_per_coord, autocorrelations_per_image)
+            else:
+                logits_per_image, logits_per_coord = self.model(images, t_points)
+                loss = self.loss_fun(logits_per_image, logits_per_coord)
         return loss
 
     def training_step(self, batch, batch_idx):
@@ -124,7 +138,6 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        print(batch["point"].shape)
         loss = self.common_step(batch, batch_idx)
         self.log("val_loss", loss)
         return loss
@@ -159,7 +172,6 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         )
 
         return optimizer
-
 
 class MyLightningCLI(LightningCLI):
     def add_arguments_to_parser(self, parser):

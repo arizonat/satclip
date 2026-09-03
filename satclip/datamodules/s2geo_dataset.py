@@ -12,7 +12,7 @@ import torch
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 
-from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform, get_s2_train_transform_temporal, get_pretrained_s2_train_transform_temporal
+from .transforms import get_precomputed_train_transform, get_pretrained_s2_train_transform, get_s2_train_transform, get_s2_train_transform_temporal, get_pretrained_s2_train_transform_temporal
 
 import datetime
 import calendar
@@ -23,6 +23,7 @@ class S2GeoDataModule(pl.LightningDataModule):
     def __init__(
         self,
         data_dir: str = "/data/geoclip_s2",
+        embeddings_fn: str = "embeddings.parquet",
         batch_size: int = 64,
         num_workers: int = 6,
         crop_size: int = 256,
@@ -33,17 +34,23 @@ class S2GeoDataModule(pl.LightningDataModule):
     ):
         super().__init__()
         self.data_dir = data_dir
+        self.embeddings_fn = embeddings_fn
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.mode = mode
+
         if transform=='pretrained':
             self.train_transform = get_pretrained_s2_train_transform(resize_crop_size=crop_size)
         elif transform=='default':
             self.train_transform = get_s2_train_transform()
         else:
             self.train_transform = transform
-            
+
+        if self.mode == "precomputed":
+            self.train_transform = get_precomputed_train_transform()
+
         self.val_random_split_fraction = val_random_split_fraction
-        self.mode = mode
+
         self.index_fn = index_fn
         self.save_hyperparameters()
 
@@ -54,7 +61,8 @@ class S2GeoDataModule(pl.LightningDataModule):
             """)
 
     def setup(self, stage="fit"):
-        dataset = S2Geo(root=self.data_dir, 
+        dataset = S2Geo(root=self.data_dir,
+                        embeddings_fn=self.embeddings_fn,
                         index_fn=self.index_fn, 
                         transform=self.train_transform, 
                         mode=self.mode)
@@ -87,6 +95,7 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
     def __init__(
         self,
         data_dir: str = "/data/geoclip_s2",
+        embeddings_fn: str = "embeddings.parquet",
         batch_size: int = 64,
         num_workers: int = 6,
         crop_size: int = 256,
@@ -97,18 +106,23 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
         index_fn: str = "index.csv"
     ):
         super().__init__()
+        self.embeddings_fn = embeddings_fn
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.mode = mode
+
         if transform=='pretrained':
             self.train_transform = get_pretrained_s2_train_transform_temporal(resize_crop_size=crop_size)
         elif transform=='default':
             self.train_transform = get_s2_train_transform_temporal()
         else:
             self.train_transform = transform
+
+        if self.mode == "precomputed":
+            self.train_transform = get_precomputed_train_transform()
             
         self.val_random_split_fraction = val_random_split_fraction
-        self.mode = mode
         self.temporal_positional_encoding = temporal_positional_encoding
         self.index_fn = index_fn
         self.save_hyperparameters()
@@ -116,6 +130,7 @@ class S2GeoTemporalDataModule(S2GeoDataModule):
     def setup(self, stage="fit"):
         dataset = S2GeoTemporal(root=self.data_dir, 
                                 index_fn=self.index_fn,
+                                embeddings_fn=self.embeddings_fn,
                                 transform=self.train_transform, 
                                 mode=self.mode, 
                                 temporal_positional_encoding=self.temporal_positional_encoding)
@@ -137,6 +152,7 @@ class S2Geo(NonGeoDataset):
         self,
         root: str,
         index_fn: str = "index.csv",
+        embeddings_fn: str = "embeddings.parquet",
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
     ) -> None:
@@ -146,7 +162,7 @@ class S2Geo(NonGeoDataset):
             transform: torch transform to apply to a sample
             mode: which data to return (options are "both" or "points"), useful for embedding locations without loading images 
         """
-        assert mode in ["both", "points"]
+        assert mode in ["both", "points", "precomputed"]
         self.root = root
         self.transform = transform
         self.mode = mode
@@ -157,6 +173,14 @@ class S2Geo(NonGeoDataset):
         df = pd.read_csv(os.path.join(self.root, self.index_fn))
         self.filenames = []
         self.points = []
+        self.embeddings = []
+
+        if self.mode == "precomputed":
+            embeddings_path = os.path.join(self.root, embeddings_fn)
+            if not os.path.exists(embeddings_path):
+                raise RuntimeError(f"Embeddings file {embeddings_path} not found.")
+            embeddings_df = pd.read_parquet(embeddings_path)
+            embeddings_dict = dict(zip(embeddings_df['image_path'], embeddings_df['embedding']))
 
         n_skipped_files = 0
         for i in range(df.shape[0]):
@@ -170,6 +194,9 @@ class S2Geo(NonGeoDataset):
             self.points.append(
                 (df.iloc[i]["lon"], df.iloc[i]["lat"])
             )
+
+            if self.mode == "precomputed":
+                self.embeddings.append(embeddings_dict.get(filename))
 
         print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
               f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
@@ -189,6 +216,9 @@ class S2Geo(NonGeoDataset):
                 data = f.read().astype(np.float32)
             #img = torch.tensor(data)
             sample["image"] = data
+
+        elif self.mode == "precomputed":
+            sample["embedding"] = self.embeddings[index]
             
         if self.transform is not None:
             sample = self.transform(sample)
@@ -251,6 +281,7 @@ class S2GeoTemporal(S2Geo):
         self,
         root: str,
         index_fn: str = "index.csv",
+        embeddings_fn: str = "embeddings.parquet",
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
         temporal_positional_encoding: Optional[str] = "normalized_day_of_year"
@@ -260,8 +291,10 @@ class S2GeoTemporal(S2Geo):
             root: root directory of S2-temporal pre-sampled dataset
             transform: torch transform to apply to a sample
             mode: which data to return (options are "both" or "points"), useful for embedding locations without loading images 
+            if mode is precomputed, the dataset will return precomputed embeddings instead of images
+            temporal_positional_encoding: which temporal positional encoding to use (options are "normalized_day_of
         """
-        assert mode in ["both", "points"]
+        assert mode in ["both", "points", "precomputed"]
         self.root = root
         self.transform = transform
         self.mode = mode
@@ -274,6 +307,14 @@ class S2GeoTemporal(S2Geo):
         df = pd.read_csv(os.path.join(self.root, self.index_fn))
         self.filenames = []
         self.points = []
+        self.embeddings = []
+
+        if self.mode == "precomputed":
+            embeddings_path = os.path.join(self.root, embeddings_fn)
+            if not os.path.exists(embeddings_path):
+                raise RuntimeError(f"Embeddings file {embeddings_path} not found.")
+            embeddings_df = pd.read_parquet(embeddings_path)
+            embeddings_dict = dict(zip(embeddings_df['image_path'], embeddings_df['embedding']))
 
         n_skipped_files = 0
         print("Parsing with temporal positional encoding:", self.temporal_positional_encoding)
@@ -285,6 +326,13 @@ class S2GeoTemporal(S2Geo):
                 continue
 
             self.filenames.append(filename)
+
+            if self.mode == "precomputed":
+                embedding = embeddings_dict.get(filename)
+                if embedding is None:
+                    raise RuntimeError(f"Embedding for {filename} not found.")
+                # embedding = np.load(os.path.join(self.root, "embeddings", df.iloc[i]["fn"].replace(".tif", ".npy")))
+                self.embeddings.append(embedding)
 
             # Parse S2 timestamp to POSIX time, note that S2 timestamps are in UTC and up to the second anyway
             t = self.parse_time(df.iloc[i]["ts"], temporal_positional_encoding = self.temporal_positional_encoding)

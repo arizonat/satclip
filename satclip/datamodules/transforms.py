@@ -165,11 +165,12 @@ def get_pretrained_terrafm_s2_train_transform_temporal(resize_crop_size = 256):
 
     return transform
 
-def get_precomputed_s2_train_transform():
+def get_precomputed_train_transform():
     def transform(sample):
-        embedding = sample["embedding"]
         point = sample["point"]
         point = coordinate_jitter(point)
+        embedding = sample["embedding"]
+        embedding = torch.tensor(embedding).to(point.device)
         return dict(embedding=embedding, point=point)
     return transform
 
