@@ -186,8 +186,15 @@ def main(args):
             continue
 
         for i, patch in enumerate(patches):
-            # Filter patches with more than 10% missing data (this should already be handled by parquet)
+            # Skip patches we've already downloaded
             item = items[i]
+            containing_dir = f"{args.img_output_dir}/images/{item.datetime.year}"
+            fn = f"{containing_dir}/patch_{items[i].id}.tif"
+            if os.path.exists(fn):
+                continue
+
+            # Filter patches with more than 10% missing data (this should already be handled by parquet)
+            # item = items[i]
             x_coord = xs[i]
             y_coord = ys[i]
             num_channels = patch.shape[0]
