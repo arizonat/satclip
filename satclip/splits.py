@@ -41,22 +41,3 @@ def temporal_splits(coords, temporal_grid_size):
     splits = ((coords // temporal_grid_size) % 2).to(torch.int8)
  
     return splits
-    
-def spatiotemporal_checkerboard_splits(coords, spatial_grid_size, temporal_grid_size):
-    """
-    Creates spatiotemporal checkerboard splits for cross-validation,
-    spatial splits are checkerboarded in 2 dimensions, and temporal splits are "checkerboarded" in 1 dimesion
-    
-    Args:
-        coords (torch.Tensor): Tensor of shape (..., 3) containing (e.g. latitude, longitude, time) pairs.
-        spatial_grid_size (float): Size of the spatial grid cells (e.g. in degrees).
-        temporal_grid_size (float): Size of the temporal grid cells (e.g. in days
-
-    """
-    spatial_splits = checkerboard_splits(coords[..., :2], spatial_grid_size, dim=-1)
-
-    temporal_splits = checkerboard_splits(coords[..., 2:], temporal_grid_size, dim=-1)
-
-    combined_splits = (spatial_splits + temporal_splits) % 2
-
-    return combined_splits
