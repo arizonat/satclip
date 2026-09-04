@@ -310,6 +310,7 @@ class S2GeoTemporal(S2Geo):
         self.embeddings = []
 
         if self.mode == "precomputed":
+            print(f"Loading precomputed embeddings from {embeddings_fn}...")
             embeddings_path = os.path.join(self.root, embeddings_fn)
             if not os.path.exists(embeddings_path):
                 raise RuntimeError(f"Embeddings file {embeddings_path} not found.")
@@ -328,7 +329,7 @@ class S2GeoTemporal(S2Geo):
             self.filenames.append(filename)
 
             if self.mode == "precomputed":
-                embedding = embeddings_dict.get(filename)
+                embedding = embeddings_dict.get(df.iloc[i]["fn"])
                 if embedding is None:
                     raise RuntimeError(f"Embedding for {filename} not found.")
                 # embedding = np.load(os.path.join(self.root, "embeddings", df.iloc[i]["fn"].replace(".tif", ".npy")))
