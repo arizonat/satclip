@@ -33,15 +33,19 @@ class S2GeoDataModule(pl.LightningDataModule):
         self.data_dir = data_dir
         self.batch_size = batch_size
         self.num_workers = num_workers
+        self.mode = mode
         if transform=='pretrained':
             self.train_transform = get_pretrained_s2_train_transform(resize_crop_size=crop_size)
         elif transform=='default':
             self.train_transform = get_s2_train_transform()
         else:
             self.train_transform = transform
+
+        if self.mode == "precomputed":
+            self.train_transform = get_precomputed_train_transform()
             
         self.val_random_split_fraction = val_random_split_fraction
-        self.mode = mode
+
         self.index_fn = index_fn
         self.embeddings_fn = embeddings_fn
         self.save_hyperparameters()
@@ -111,27 +115,27 @@ class S2Geo(NonGeoDataset):
         """
         assert mode in ["both", "points", "precomputed"]
         self.embeddings_fn = embeddings_fn
+        self.index_fn = index_fn
         self.root = root
         self.transform = transform
         self.mode = mode
         if not self._check_integrity():
             raise RuntimeError("Dataset not found or corrupted.")
 
-        index_fn = self.index_fn
-
-        df = pd.read_csv(os.path.join(self.root, index_fn))
+        df = pd.read_csv(os.path.join(self.root, self.index_fn))
         self.filenames = []
         self.points = []
         self.embeddings = []
 
         # Parse the embeddings parquet files
         if self.mode == "precomputed":
-            embeddings_path = os.path.join(self.root, embeddings_fn)
+            embeddings_path = os.path.join(self.root, self.embeddings_fn)
 
             if not os.path.exists(embeddings_path):
                 raise RuntimeError(f"Embeddings file {embeddings_path} not found.")
             embeddings_df = pd.read_parquet(embeddings_path)
             embeddings_dict = dict(zip(embeddings_df['image_path'], embeddings_df['embedding']))
+            print(f"Loaded {len(embeddings_dict)} embeddings from {embeddings_path}")
 
         n_skipped_files = 0
         for i in range(df.shape[0]):
@@ -141,13 +145,17 @@ class S2Geo(NonGeoDataset):
                 n_skipped_files += 1
                 continue
 
-            self.filenames.append(filename)
+            self.filenames.append(df.iloc[i]["fn"])
             self.points.append(
                 (df.iloc[i]["lon"], df.iloc[i]["lat"])
             )
 
             if self.mode == "precomputed":
-                self.embeddings.append(embeddings_dict.get(filename))
+                self.embeddings.append(embeddings_dict[df.iloc[i]["fn"]])
+
+        if self.mode == "precomputed":
+            if len(self.embeddings) != len(self.filenames):
+                raise RuntimeError("Some embeddings are missing for the given filenames.")
 
         print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
               f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
@@ -172,8 +180,11 @@ class S2Geo(NonGeoDataset):
             sample["embedding"] = self.embeddings[index]
             
         if self.transform is not None:
-            sample = self.transform(sample)
-            
+            try:
+                sample = self.transform(sample)
+            except Exception as e:
+                print(f"Error applying transform to sample {index}: {e}, {sample}")
+                raise e
         return sample
 
     def __len__(self) -> int:
@@ -188,8 +199,8 @@ class S2Geo(NonGeoDataset):
         Returns:
             True if the dataset directories and split files are found, else False
         """
-        
-        for filename in self.index_fn:
+        print(f"Checking integrity of {self.root}...")
+        for filename in self.validation_filenames:
             filepath = os.path.join(self.root, filename)
             if not os.path.exists(filepath):
                 print(filepath +' missing' )

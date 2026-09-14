@@ -32,8 +32,9 @@ model:
   capacity: 256
   mode: 'precomputed' # both, point, precomputed
 data:
-  data_dir: /u/leca5365/Data/satclip-1M
+  data_dir: /mnt/DATA/leca5365/satclip-s2-1M-2.0
   embeddings_fn: moco_vit16_embeddings.parquet
+  index_fn: index-balanced-100k.csv
   batch_size: 512
   num_workers: 12
   crop_size: 224

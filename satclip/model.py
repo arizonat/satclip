@@ -368,7 +368,7 @@ class SatCLIP(nn.Module):
         if self.mode == "both":
             image_features = self.encode_image(image)
         elif self.mode == "precomputed":
-            images_features = image
+            image_features = image
         else:
             raise ValueError(f"Invalid Mode {self.mode}.")
         
