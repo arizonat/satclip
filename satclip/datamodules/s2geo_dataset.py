@@ -12,20 +12,22 @@ import torch
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 
-from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform
+from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform, get_precomputer_train_transform
 
 CHECK_MIN_FILESIZE = 10000 # 10kb
 
 class S2GeoDataModule(pl.LightningDataModule):
     def __init__(
         self,
-        data_dir: str = "/data/geoclip_s2",
+        data_dir: str = "/u/leca5365/Data/satclip-1M",
+        index_fn: str = "index.csv",
         batch_size: int = 64,
         num_workers: int = 6,
         crop_size: int = 256,
         val_random_split_fraction: float = 0.1,
         transform: str = 'pretrained',
         mode: str = "both",
+        embeddings_fn: str = "embeddings.parquet"
     ):
         super().__init__()
         self.data_dir = data_dir
@@ -40,6 +42,8 @@ class S2GeoDataModule(pl.LightningDataModule):
             
         self.val_random_split_fraction = val_random_split_fraction
         self.mode = mode
+        self.index_fn = index_fn
+        self.embeddings_fn = embeddings_fn
         self.save_hyperparameters()
 
     def prepare_data(self) -> None:
@@ -49,7 +53,7 @@ class S2GeoDataModule(pl.LightningDataModule):
             """)
 
     def setup(self, stage="fit"):
-        dataset = S2Geo(root=self.data_dir, transform=self.train_transform, mode=self.mode)
+        dataset = S2Geo(root=self.data_dir, index_fn=self.index_fn, embeddings_fn=self.embeddings_fn, transform=self.train_transform, mode=self.mode)
 
         N_val = int(len(dataset) * self.val_random_split_fraction)
         N_train = len(dataset) - N_val
@@ -85,10 +89,10 @@ class S2Geo(NonGeoDataset):
     """
 
     validation_filenames = [
-        "index.csv",
+        "index-balanced-1M.csv",
         "images/",
-        "images/patch_0.tif",
-        "images/patch_99999.tif",
+        #"images/patch_0.tif",
+        #"images/patch_99999.tif",
     ]
 
     def __init__(
@@ -96,6 +100,8 @@ class S2Geo(NonGeoDataset):
         root: str,
         transform: Optional[Callable[[Dict[str, Tensor]], Dict[str, Tensor]]] = None,
         mode: Optional[str] = "both",
+        embeddings_fn: str = "embeddings.parquet",
+        index_fn: str = "index.csv",
     ) -> None:
         """Initialize a new S2-100K dataset instance.
         Args:
@@ -103,18 +109,29 @@ class S2Geo(NonGeoDataset):
             transform: torch transform to apply to a sample
             mode: which data to return (options are "both" or "points"), useful for embedding locations without loading images 
         """
-        assert mode in ["both", "points"]
+        assert mode in ["both", "points", "precomputed"]
+        self.embeddings_fn = embeddings_fn
         self.root = root
         self.transform = transform
         self.mode = mode
         if not self._check_integrity():
             raise RuntimeError("Dataset not found or corrupted.")
 
-        index_fn = "index.csv"
+        index_fn = self.index_fn
 
         df = pd.read_csv(os.path.join(self.root, index_fn))
         self.filenames = []
         self.points = []
+        self.embeddings = []
+
+        # Parse the embeddings parquet files
+        if self.mode == "precomputed":
+            embeddings_path = os.path.join(self.root, embeddings_fn)
+
+            if not os.path.exists(embeddings_path):
+                raise RuntimeError(f"Embeddings file {embeddings_path} not found.")
+            embeddings_df = pd.read_parquet(embeddings_path)
+            embeddings_dict = dict(zip(embeddings_df['image_path'], embeddings_df['embedding']))
 
         n_skipped_files = 0
         for i in range(df.shape[0]):
@@ -128,6 +145,9 @@ class S2Geo(NonGeoDataset):
             self.points.append(
                 (df.iloc[i]["lon"], df.iloc[i]["lat"])
             )
+
+            if self.mode == "precomputed":
+                self.embeddings.append(embeddings_dict.get(filename))
 
         print(f"skipped {n_skipped_files}/{len(df)} images because they were smaller "
               f"than {CHECK_MIN_FILESIZE} bytes... they probably contained nodata pixels")
@@ -147,6 +167,9 @@ class S2Geo(NonGeoDataset):
                 data = f.read().astype(np.float32)
             #img = torch.tensor(data)
             sample["image"] = data
+
+        elif self.mode == "precomputed":
+            sample["embedding"] = self.embeddings[index]
             
         if self.transform is not None:
             sample = self.transform(sample)
@@ -166,7 +189,7 @@ class S2Geo(NonGeoDataset):
             True if the dataset directories and split files are found, else False
         """
         
-        for filename in self.validation_filenames:
+        for filename in self.index_fn:
             filepath = os.path.join(self.root, filename)
             if not os.path.exists(filepath):
                 print(filepath +' missing' )

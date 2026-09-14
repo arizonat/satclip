@@ -16,8 +16,8 @@ trainer:
   max_epochs: 500
 model:
   embed_dim: 256
-  image_resolution: 256
-  vision_layers: 4
+  image_resolution: 224
+  vision_layers: 'moco_vit16'
   vision_width: 128
   vision_patch_size: 32
   in_channels: 13
@@ -25,14 +25,18 @@ model:
   frequency_num: 16
   max_radius: 0.01
   min_radius: 0.00001
-  legendre_polys: 32
+  legendre_polys: 40
   sh_embedding_dims: 32
   learning_rate: 0.0001
   num_hidden_layers: 2
   capacity: 256
+  mode: 'precomputed' # both, point, precomputed
 data:
-  data_dir: /data/s2
+  data_dir: /u/leca5365/Data/satclip-1M
+  embeddings_fn: moco_vit16_embeddings.parquet
   batch_size: 512
-  num_workers: 8
+  num_workers: 12
+  crop_size: 224
   val_random_split_fraction: 0.1
+  mode: 'precomputed'
 watchmodel: True

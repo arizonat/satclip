@@ -76,6 +76,15 @@ def get_pretrained_s2_train_transform(resize_crop_size = 256):
 
     return transform
 
+def get_precomputed_train_transform():
+    def transform(sample):
+        embedding = sample["embedding"]
+        point = sample["point"]
+        point = coordinate_jitter(point)
+        embedding = torch.tensor(embedding).to(point.device)
+        return dict(embedding=embedding, point=point)
+    return transform
+
 def coordinate_jitter(
         point,
         radius=0.01 # approximately 1 km

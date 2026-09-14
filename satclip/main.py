@@ -31,6 +31,7 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
         weight_decay=0.01,
         num_hidden_layers=2,
         capacity=256,
+        mode="both"
     ) -> None:
         super().__init__()
 
@@ -51,17 +52,22 @@ class SatCLIPLightningModule(lightning.pytorch.LightningModule):
             sh_embedding_dims=sh_embedding_dims,
             num_hidden_layers=num_hidden_layers,
             capacity=capacity,
+            mode=mode,
         )
 
         self.loss_fun = SatCLIPLoss()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.save_hyperparameters()
+        self.mode = mode
 
     def common_step(self, batch, batch_idx):
-        images = batch["image"]
+        if self.mode == "precomputed":
+            visual_rep = batch["embedding"].float()
+        else:
+            visual_rep = batch["image"]
         t_points = batch["point"].float()
-        logits_per_image, logits_per_coord = self.model(images, t_points)
+        logits_per_image, logits_per_coord = self.model(visual_rep, t_points)
         return self.loss_fun(logits_per_image, logits_per_coord)
 
     def training_step(self, batch, batch_idx):

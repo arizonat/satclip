@@ -266,11 +266,14 @@ class SatCLIP(nn.Module):
                  ffn: bool=True,
                  num_hidden_layers: int=2,
                  capacity: int=256,
+                 mode: str="both",
                  *args,
                  **kwargs
                  ):
         super().__init__()
-            
+
+        self.mode = mode
+        
         if isinstance(vision_layers, (tuple, list)):
             print('using modified resnet')
             vision_heads = vision_width * 32 // 64
@@ -362,7 +365,13 @@ class SatCLIP(nn.Module):
 
     def forward(self, image, coords):
 
-        image_features = self.encode_image(image)     
+        if self.mode == "both":
+            image_features = self.encode_image(image)
+        elif self.mode == "precomputed":
+            images_features = image
+        else:
+            raise ValueError(f"Invalid Mode {self.mode}.")
+        
         location_features = self.encode_location(coords).float()
         # normalized features
         image_features = image_features / image_features.norm(dim=1, keepdim=True)
