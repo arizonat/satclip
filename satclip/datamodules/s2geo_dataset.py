@@ -12,7 +12,7 @@ import torch
 import lightning.pytorch as pl
 from torch.utils.data import DataLoader
 
-from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform, get_precomputer_train_transform
+from .transforms import get_pretrained_s2_train_transform, get_s2_train_transform, get_precomputed_train_transform
 
 CHECK_MIN_FILESIZE = 10000 # 10kb
 
