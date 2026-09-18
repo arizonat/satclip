@@ -10,6 +10,7 @@ from load_eval_models import *
 import torch.nn.functional as F
 from load_eval_models import *
 from tqdm import tqdm
+from functools import partial
 
 from satclip.splits import *
 
@@ -19,7 +20,12 @@ SEEDS = [42]
 
 # List of models to run
 # MODELS = ["tsatclip-linear", "gtloc", "climplicit"]
-MODELS = [ "tsatclip/doy", "tsatclip/linear", "tsatclip/toroidal", "gtloc", "climplicit", "sin-cos", "simplest"]
+# MODELS = [ "tsatclip/doy", "tsatclip/linear", "tsatclip/toroidal", "gtloc", "climplicit", "sin-cos", "simplest"]
+MODELS = ["tsatclip/y_100k", "tsatclip/toy_y_100k", "tsatclip/toy_100k", 
+          "tsatclip/y_150k", "tsatclip/toy_y_150k", "tsatclip/toy_150k", 
+          "tsatclip/y_200k", "tsatclip/toy_y_200k", "tsatclip/toy_200k",
+          "tsatclip/y_250k", "tsatclip/toy_y_250k", "tsatclip/toy_250k",
+          "gtloc", "climplicit", "sin-cos"]
 # MODELS = ["tsatclip/toroidal"]
 
 # In Lat/Lon Degrees
@@ -39,6 +45,9 @@ CV_TYPES = ["uar", "spatial", "temporal"]
 METRICS = ["ridge-cv"]
 
 RIDGE_ALPHAS = tuple(float(10.0**e) for e in np.arange(-4.0, 6.5, 0.5))
+
+# Subsample amount for ghcnd
+PROBE_SUBSAMPLE_AMOUNT = 500_000
 
 class MLP(nn.Module):
     def __init__(self, input_dim, dim_hidden, num_layers, out_dims):
@@ -200,6 +209,23 @@ _REGISTERED_MODELS = {
     "tsatclip/linear": load_temporal_satclip_linear_model,
     "tsatclip/doy": load_temporal_satclip_doy_model,
     "tsatclip/toroidal": load_temporal_satclip_toroidal_model,
+
+    "tsatclip/y_100k": partial(load_temporal_satclip_y_model, ckpt_path=DEFAULT_TS_Y_100K_CKPT_PATH),
+    "tsatclip/toy_100k": partial(load_temporal_satclip_toy_model, ckpt_path=DEFAULT_TS_TOY_100K_CKPT_PATH),
+    "tsatclip/toy_y_100k": partial(load_temporal_satclip_toy_y_model, ckpt_path=DEFAULT_TS_TOYY_100K_CKPT_PATH),
+
+    "tsatclip/y_150k": partial(load_temporal_satclip_y_model, ckpt_path=DEFAULT_TS_Y_150K_CKPT_PATH),
+    "tsatclip/toy_150k": partial(load_temporal_satclip_toy_model, ckpt_path=DEFAULT_TS_TOY_150K_CKPT_PATH),
+    "tsatclip/toy_y_150k": partial(load_temporal_satclip_toy_y_model, ckpt_path=DEFAULT_TS_TOYY_150K_CKPT_PATH),
+
+    "tsatclip/y_200k": partial(load_temporal_satclip_y_model, ckpt_path=DEFAULT_TS_Y_200K_CKPT_PATH),
+    "tsatclip/toy_200k": partial(load_temporal_satclip_toy_model, ckpt_path=DEFAULT_TS_TOY_200K_CKPT_PATH),
+    "tsatclip/toy_y_200k": partial(load_temporal_satclip_toy_y_model, ckpt_path=DEFAULT_TS_TOYY_200K_CKPT_PATH),
+
+    "tsatclip/y_250k": partial(load_temporal_satclip_y_model, ckpt_path=DEFAULT_TS_Y_250K_CKPT_PATH),
+    "tsatclip/toy_250k": partial(load_temporal_satclip_toy_model, ckpt_path=DEFAULT_TS_TOY_250K_CKPT_PATH),
+    "tsatclip/toy_y_250k": partial(load_temporal_satclip_toy_y_model, ckpt_path=DEFAULT_TS_TOYY_250K_CKPT_PATH),
+
     "gtloc": load_gtloc_model,
     "climplicit": lambda device="cuda": ClimplicitWrapper().to(device),
     "sin-cos": lambda device="cuda": SinCosWrapper().to(device),
@@ -238,7 +264,7 @@ def run_evaluation(seed, model, dataset, cv_type, metric, delta=None, device="cu
     orig_dataset_shape = dataset.shape
 
     # Subsample the dataset for faster evaluation (optional)
-    dataset = dataset[torch.randperm(dataset.shape[0])[:500_000]]  # Subsample to 10,000 points
+    dataset = dataset[torch.randperm(dataset.shape[0])[:PROBE_SUBSAMPLE_AMOUNT]]  # Subsample to 10,000 points
     # print(f"Subsampled dataset shape from {orig_dataset_shape} to {dataset.shape}")
 
     # Split the dataset into train and test sets based on cv_type

@@ -17,6 +17,23 @@ DEFAULT_TS_DOY_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_tem
 DEFAULT_TS_TOROIDAL_CKPT_PATH = "/home/leca5365/Documents/satclip/satclip/satclip_temporal_logs/satclip-s2-satcliploss-1M-toroidal/satclip-s2-satcliploss-1M-toroidal/checkpoints/last.ckpt"
 DEFAULT_GTLOC_CKPT_PATH = "/home/leca5365/Documents/gtloc/ckpts/gtloc.pt"
 
+DEFAULT_TS_TOY_100K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-100k-toy/checkpoints/last.ckpt"
+DEFAULT_TS_TOYY_100K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-100k-toy_norm_year/checkpoints/last.ckpt"
+DEFAULT_TS_Y_100K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-100k-norm_year/checkpoints/last.ckpt"
+
+DEFAULT_TS_TOY_150K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-150k-toy/checkpoints/last.ckpt"
+DEFAULT_TS_TOYY_150K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-150k-toy_norm_year/checkpoints/last.ckpt"
+DEFAULT_TS_Y_150K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-150k-norm_year/checkpoints/last.ckpt"
+
+DEFAULT_TS_TOY_200K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-200k-toy/checkpoints/last.ckpt"
+DEFAULT_TS_TOYY_200K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-200k-toy_norm_year/checkpoints/last.ckpt"
+DEFAULT_TS_Y_200K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-200k-norm_year/checkpoints/last.ckpt"
+
+DEFAULT_TS_TOY_250K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-250k-toy/checkpoints/last.ckpt"
+DEFAULT_TS_TOYY_250K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-250k-toy_norm_year/checkpoints/last.ckpt"
+DEFAULT_TS_Y_250K_CKPT_PATH = "/mnt/DATA/leca5365/tsatclip-checkpoints/temporal_satclip-s2/tsatclip-s2-250k-norm_year/checkpoints/last.ckpt"
+
+
 class ClimplicitWrapper(nn.Module):
     def __init__(self, ckpt_path: str = "Jobedo/climplicit", device: str = "cuda"):
         super().__init__()
@@ -71,6 +88,23 @@ class TemporalSatCLIPWrapper(nn.Module):
             day_of_year = ((posix_time % 31556926) / 86400).long() + 1
             x[..., 2] = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
 
+        elif self.model_name == "tsatclip/toy":
+            time_of_year = ((posix_time % 31556926) / 86400).long() + 1
+            x[..., 2] = (time_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+
+        elif self.model_name == "tsatclip/y":
+            # Convert posix time to normalized year
+            year = ((posix_time / 31556926).long() + 1970)
+            x[..., 2] = (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+
+        elif self.model_name == "tsatclip/toy_y":
+            # Convert posix time to normalized year and day of year
+            year = ((posix_time / 31556926).long() + 1970)
+            day_of_year = ((posix_time % 31556926) / 86400).long() + 1
+            toy = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+            y = (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+            x = torch.cat([x[..., :2], toy.unsqueeze(-1), y.unsqueeze(-1)], dim=-1)
+            
         elif self.model_name == "tsatclip/linear":
             # Convert posix time to linear time
             linear_time = (posix_time - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)
@@ -84,7 +118,6 @@ class TemporalSatCLIPWrapper(nn.Module):
             days = posix_time.cpu().numpy().astype('datetime64[D]') - dates + 1
             doms = np.array([calendar.monthrange(year, month) for year, month in zip(years, months)])
             norm_month = torch.tensor(((months - 1) + ((days - 1) / doms[:, 1])).astype(float) / 12.0).to(x.device)
-
 
             hours = (posix_time % 86400) / 3600
             minutes = (posix_time % 3600) / 60
@@ -150,6 +183,43 @@ def load_gtloc_model(ckpt_path: str = DEFAULT_GTLOC_CKPT_PATH, device: str = "cu
 
 def load_temporal_satclip_linear_model(model_name: str = "tsatclip/linear", 
                                        ckpt_path: str = DEFAULT_TS_LINEAR_CKPT_PATH, 
+                                       device: str = "cuda", 
+                                       posix_min_time: float = DEFAULT_POSIX_MIN_TIME, 
+                                       posix_max_time: float = DEFAULT_POSIX_MAX_TIME):
+
+    return TemporalSatCLIPWrapper(model_name=model_name, 
+                                  ckpt_path=ckpt_path, 
+                                  device=device, 
+                                  posix_min_time=posix_min_time, 
+                                  posix_max_time=posix_max_time)
+
+
+def load_temporal_satclip_y_model(model_name: str = "tsatclip/y", 
+                                       ckpt_path: str = DEFAULT_TS_Y_200K_CKPT_PATH, 
+                                       device: str = "cuda", 
+                                       posix_min_time: float = DEFAULT_POSIX_MIN_TIME, 
+                                       posix_max_time: float = DEFAULT_POSIX_MAX_TIME):
+
+    return TemporalSatCLIPWrapper(model_name=model_name, 
+                                  ckpt_path=ckpt_path, 
+                                  device=device, 
+                                  posix_min_time=posix_min_time, 
+                                  posix_max_time=posix_max_time)
+
+def load_temporal_satclip_toy_model(model_name: str = "tsatclip/toy", 
+                                       ckpt_path: str = DEFAULT_TS_TOY_200K_CKPT_PATH, 
+                                       device: str = "cuda", 
+                                       posix_min_time: float = DEFAULT_POSIX_MIN_TIME, 
+                                       posix_max_time: float = DEFAULT_POSIX_MAX_TIME):
+
+    return TemporalSatCLIPWrapper(model_name=model_name, 
+                                  ckpt_path=ckpt_path, 
+                                  device=device, 
+                                  posix_min_time=posix_min_time, 
+                                  posix_max_time=posix_max_time)
+
+def load_temporal_satclip_toy_y_model(model_name: str = "tsatclip/toy_y", 
+                                       ckpt_path: str = DEFAULT_TS_TOYY_200K_CKPT_PATH, 
                                        device: str = "cuda", 
                                        posix_min_time: float = DEFAULT_POSIX_MIN_TIME, 
                                        posix_max_time: float = DEFAULT_POSIX_MAX_TIME):
