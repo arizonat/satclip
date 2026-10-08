@@ -9,7 +9,10 @@ import pathlib
 import sys
 from pathlib import Path
 
-def main(root_dir):
+def main(root_dir, satellite_name="sentinel2"):
+    """
+    satellite_name: str, either "sentinel2" or "landsat"
+    """
     
     root_dir = Path(root_dir)
     urls = Path(f"{root_dir}").rglob("*.tif")
@@ -31,10 +34,16 @@ def main(root_dir):
             filename = pathlib.Path(url).relative_to(root_dir/"images")
 
             timestamp = src.tags().get("datetime")
-            granule_id = src.tags().get("granule_id")
+
+            if satellite_name == "landsat":
+                id = src.tags().get("id")
+            elif satellite_name == "sentinel2":
+                id = src.tags().get("granule_id")
+            else:
+                raise ValueError(f"Unknown satellite name: {satellite_name}")
 
             fns.append(filename)
-            ids.append(granule_id)
+            ids.append(id)
             ts.append(timestamp)
             lats.append(y)
             lons.append(x)
@@ -51,4 +60,5 @@ def main(root_dir):
 
 if __name__ == '__main__':
     ROOT = sys.argv[1]
-    main(ROOT)
+    SATELLITE_NAME = sys.argv[2]
+    main(ROOT, satellite_name=SATELLITE_NAME)
