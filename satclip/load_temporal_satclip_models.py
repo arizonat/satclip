@@ -82,6 +82,8 @@ class TemporalSatCLIPWrapper(nn.Module):
         x = x.clone()
         posix_time = x[..., 2]
 
+        # print("Using TemporalSatCLIP model with model_name:", self.model_name)
+
         # Handle time conversion based on model_name
         if self.model_name == "tsatclip/doy":
             # Convert posix time to normalized day of year
@@ -125,6 +127,9 @@ class TemporalSatCLIPWrapper(nn.Module):
             norm_hours = (hours + (minutes/60) + (seconds/3600)) / 24.0
 
             x = torch.cat([x[...,:-1], norm_month.unsqueeze(-1), norm_hours.unsqueeze(-1)], dim=-1)
+
+        else:
+            raise ValueError(f"Unknown model_name: {self.model_name}")
 
         with torch.no_grad():
             # x = x.permute(1, 0, 2)  # Change to (lon, lat, time)

@@ -6,9 +6,8 @@ from turtle import pd
 import torch
 import torch.nn as nn
 import pandas as pd
-from load_eval_models import *
 import torch.nn.functional as F
-from load_eval_models import *
+from satclip.satclip.load_temporal_satclip_models import *
 from tqdm import tqdm
 from functools import partial
 
