@@ -51,6 +51,36 @@ class TemporalSatCLIPWrapper(nn.Module):
             linear_time = (posix_time - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)
             x[..., 2] = linear_time.float()
 
+                # print("Using TemporalSatCLIP model with model_name:", self.model_name)
+
+        # Handle time conversion based on model_name
+        if self.model_name == "tsatclip/doy":
+            # Convert posix time to normalized day of year
+            day_of_year = ((posix_time % 31556926) / 86400).long() + 1
+            x[..., 2] = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+
+        elif self.model_name == "tsatclip/toy":
+            time_of_year = ((posix_time % 31556926) / 86400).long() + 1
+            x[..., 2] = (time_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+
+        elif self.model_name == "tsatclip/y":
+            # Convert posix time to normalized year
+            year = ((posix_time / 31556926).long() + 1970)
+            x[..., 2] = (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+
+        elif self.model_name == "tsatclip/toy_y":
+            # Convert posix time to normalized year and day of year
+            year = ((posix_time / 31556926).long() + 1970)
+            day_of_year = ((posix_time % 31556926) / 86400).long() + 1
+            toy = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+            y = (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+            x = torch.cat([x[..., :2], toy.unsqueeze(-1), y.unsqueeze(-1)], dim=-1)
+            
+        elif self.model_name == "tsatclip/linear":
+            # Convert posix time to linear time
+            linear_time = (posix_time - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)
+            x[..., 2] = linear_time.float()
+
         elif self.model_name == "tsatclip/toroidal":
             # Convert posix time to toroidal representation
             dates = posix_time.cpu().numpy().astype('datetime64[M]')
