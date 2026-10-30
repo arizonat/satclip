@@ -11,6 +11,10 @@ from satclip import TemporalSatCLIP
 from torch import nn
 import numpy as np
 
+SECONDS_IN_A_HOUR = 3600
+SECONDS_IN_A_DAY = 86400
+SECONDS_IN_A_YEAR = 31556952 # Gregorian year 365.2425 days
+
 class TemporalSatCLIPWrapper(nn.Module):
     def __init__(self, model_name: str = "tsatclip/linear", ckpt_path: str = None, device: str = "cuda", posix_min_time: int = None, posix_max_time: int = None, embedding_dim: int = 256):
         # Options for model_name: "tsatclip/linear", "tsatclip/doy"
@@ -33,6 +37,18 @@ class TemporalSatCLIPWrapper(nn.Module):
 
         self.embedding_dim = embedding_dim
 
+    def _normalized_year(self, posix_time):
+        year = ((posix_time / SECONDS_IN_A_YEAR).long() + 1970)
+        return (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+
+    def _normalized_day_of_year(self, posix_time):
+        day_of_year = ((posix_time % SECONDS_IN_A_YEAR) / SECONDS_IN_A_DAY).long() + 1
+        return (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+
+    def _normalized_time_of_year(self, posix_time):
+        time_of_year = ((posix_time % SECONDS_IN_A_YEAR) / SECONDS_IN_A_DAY).long() + 1
+        return (time_of_year - 1) / 364.0  # Normalize to [0, 1]
+
     def forward(self, x):
         # Wrapper expects (N, [lat, lon, time]) and returns embeddings
         # The TemporalSatCLIP model expects (N, [lon, lat, posix_time]) and returns embeddings
@@ -43,37 +59,29 @@ class TemporalSatCLIPWrapper(nn.Module):
         # Handle time conversion based on model_name
         if self.model_name == "tsatclip/doy":
             # Convert posix time to normalized day of year
-            day_of_year = ((posix_time % 31556926) / 86400).long() + 1
-            x[..., 2] = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+            x[..., 2] = self._normalized_day_of_year(posix_time)  # Normalize to [0, 1]
 
         elif self.model_name == "tsatclip/linear":
             # Convert posix time to linear time
             linear_time = (posix_time - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)
             x[..., 2] = linear_time.float()
 
-                # print("Using TemporalSatCLIP model with model_name:", self.model_name)
-
         # Handle time conversion based on model_name
         if self.model_name == "tsatclip/doy":
             # Convert posix time to normalized day of year
-            day_of_year = ((posix_time % 31556926) / 86400).long() + 1
-            x[..., 2] = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+            x[..., 2] = self._normalized_day_of_year(posix_time)  # Normalize to [0, 1]
 
         elif self.model_name == "tsatclip/toy":
-            time_of_year = ((posix_time % 31556926) / 86400).long() + 1
-            x[..., 2] = (time_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
+            x[..., 2] = self._normalized_time_of_year(posix_time)  # Normalize to [0, 1]
 
         elif self.model_name == "tsatclip/y":
             # Convert posix time to normalized year
-            year = ((posix_time / 31556926).long() + 1970)
-            x[..., 2] = (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+            x[..., 2] = self._normalized_year(posix_time)  # Normalize to [0, 1]
 
         elif self.model_name == "tsatclip/toy_y":
             # Convert posix time to normalized year and day of year
-            year = ((posix_time / 31556926).long() + 1970)
-            day_of_year = ((posix_time % 31556926) / 86400).long() + 1
-            toy = (day_of_year.int() - 1) / 364.0  # Normalize to [0, 1]
-            y = (year.int() - self.posix_min_time) / (self.posix_max_time - self.posix_min_time)  # Normalize to [0, 1]
+            toy = self._normalized_day_of_year(posix_time)  # Normalize to [0, 1]
+            y = self._normalized_year(posix_time)  # Normalize to [0, 1]
             x = torch.cat([x[..., :2], toy.unsqueeze(-1), y.unsqueeze(-1)], dim=-1)
             
         elif self.model_name == "tsatclip/linear":
@@ -90,11 +98,10 @@ class TemporalSatCLIPWrapper(nn.Module):
             doms = np.array([calendar.monthrange(year, month) for year, month in zip(years, months)])
             norm_month = torch.tensor(((months - 1) + ((days - 1) / doms[:, 1])).astype(float) / 12.0).to(x.device)
 
-
-            hours = (posix_time % 86400) / 3600
-            minutes = (posix_time % 3600) / 60
+            hours = (posix_time % SECONDS_IN_A_DAY) / SECONDS_IN_A_HOUR
+            minutes = (posix_time % SECONDS_IN_A_HOUR) / 60
             seconds = posix_time % 60
-            norm_hours = (hours + (minutes/60) + (seconds/3600)) / 24.0
+            norm_hours = (hours + (minutes/60) + (seconds/SECONDS_IN_A_HOUR)) / 24.0
 
             x = torch.cat([x[...,:-1], norm_month.unsqueeze(-1), norm_hours.unsqueeze(-1)], dim=-1)
 
