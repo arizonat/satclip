@@ -102,7 +102,7 @@ if __name__ == "__main__":
     satellite = sys.argv[1] # landsat or sentinel2
     root_dir = sys.argv[2]
 
-    num_workers = 1
+    num_workers = 8
 
     dataset_csv = "index.csv"  # Path to the CSV file containing the dataset
     encoder_model_name = "moco_vit16"
